@@ -1,0 +1,6 @@
+# Script volumes: the .md is the byte-exact source of a script (fenced code
+# block + sha256 in frontmatter). Git must not rewrite its CRLF/code bytes on
+# checkout, or the extractor's sha256 safety net fails on Linux/macOS clones
+# (core.autocrlf / eol normalization). Mark them binary so bytes round-trip
+# verbatim on every platform. The extracted .py is temporary and gitignored.
+agents_vault/90-Meta/script-volumes/*.md -text

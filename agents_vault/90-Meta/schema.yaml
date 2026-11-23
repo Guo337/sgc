@@ -1,0 +1,209 @@
+# TTL 记忆总库 frontmatter Schema v0.7.5（唯一权威）
+# 修订须经 SPEC-WRITE 微词反馈流程；修订说明下沉至 04-Logs/corrections/（v0.7 起，规格只留当前态+指针）
+
+frontmatter_subset:    # v0.7.3：doctor 解析器只承诺此扁平子集（独立评估 S4/FP4 闭合：子集外 fail-loud，不静默近似）
+  allowed:             # 扁平 key: value 标量；内联 [a, b] 列表；块列表（- 项，项为标量或单行 flow-map 字符串如 edges）
+    - flat-scalar
+    - inline-list
+    - block-list-of-scalars-or-flowmap-strings
+  rejected:            # 以下形态整块 frontmatter 判不可解析（FM_MISSING，与 Obsidian 丢弃整块同判）
+    - duplicate-keys   # 真实 YAML 拒绝重复键
+    - block-scalars    # > | >- |- 等
+    - nested-mappings
+    - anchors-aliases  # & *
+    - tabs
+  rationale:           # 正则近似非正则文法是打地鼠；显式声明子集+边界拒绝，把语义分歧变成不可能
+
+id_format: "{kind}-{yyyy}-{seq}"   # kind: c=card, s=summary, pit=pitfall, spec, fb=feedback；L1 日志/申报报告/更正说明例外用 "{kind}-{yyyy}-{mm}-{dd}-{seq}"（按日编号，log=日志/rep=申报报告/corr=更正说明，见 T-log/T-report/T-correction；corr 的 seq 全局递增以保证跨天唯一）
+# vol 专属形态（脚本卷，corr-2026-11-16-48）：id = "vol-{program}"，program=脚本 stem（[a-z][a-z0-9-]*，下划线转连字符），
+# 程序名锚定（id↔文件名 stem↔source-of 同源）。完整调用身份=source-of 相对路径；同 stem 异目录撞名时
+# **后来者**用最近可区分目录段限定（如 vol-net-io），**先来者 id 不动**（包命名空间稳定性）；限定走 correction 留痕。
+
+id_namespace:            # 联邦 id 命名空间（Jira/GitHub 同构：前缀分段 + 移交换号；Owner 2026-11-15 裁，corr-2026-11-15-47）
+  field:       id-namespace        # 库根 00-ROOT.md frontmatter 可选字段，声明本库 id 前缀 slug（建议 [a-z][a-z0-9-]*）
+  owner_vault: exempt              # 主库（未声明该字段）豁免：历史 id 即联邦主命名空间 c-{yyyy}-{seq}
+  sub_vault:   required-for-new    # 声明后，本库新建条目 id 必须带本库前缀：L2/L3 "{kind}-{slug}-{seq}"，L1 "{kind}-{slug}-{yyyy}-{mm}-{dd}-{seq}"
+  copied:      keep-upstream-id    # 赋能复制来的上游条目保留原 id（上游身份引用，供 re-sync/溯源），豁免前缀校验；v0.7.3 起须带 source 指针佐证（缺则 ID_NAMESPACE WARN，不拦死真实复制）
+  upstream:    remint-on-merge     # 上提并入时由验收方换主库号 + 留来源指针（见上提验收流程）；前缀撞车在验收边界拦，无需中央注册
+  root_exempt: true                # 00-ROOT.md 自身豁免（骨架根 id spec-root-000 各库同源）
+  doctor:      ID_NAMESPACE        # entry_doctor 校验：声明库中既非本库前缀、又无 provenance: copied 标记的条目 → ERROR
+
+operating_mode:          # 运行模式（认知姿态），D14；默认档在 ROOT L0 声明
+  default:   fast-iterate          # 本库默认；可被 project/session 覆盖
+  enum:      [fast-iterate, careful]
+  dials:                           # 由 mode + 条目 risk 派生的两个旋钮
+    thinking: [low, high]                     # 思考力度
+    confirm:  [act-then-report, confirm-first] # 确认模式
+  escalate_when: [不可逆, 触及真安全红线, 意图模糊]   # 命中任一 → 上调 careful
+
+common:                # 所有文件必填（除 risk 可选）
+  id:          string
+  layer:       enum [1, 2, 3]      # 1=情景 2=语义 3=规格
+  type:        enum [concept, claim, procedure, observation, entity, summary, pitfall, spec, log, report, correction, feedback, script-volume, constraint, reference, status, overview]   # 条目种类，与 layer 正交：L1→log/report/correction；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback；script-volume=运行时骨架载体（脚本卷），非知识条目，豁免 common 知识必填/layer/type↔layer 校验，按 script_volume 节校验（corr-2026-11-16-48）；constraint/reference/status=治理族（Agent-Governance 内迁），非知识条目，豁免同上，按 governance 节校验（corr-2026-11-16-57）；overview=纯人读全景地图（README），非知识条目，豁免同上，按 overview 节校验，不进检索装配（编排器类别过滤执行，corr-2026-11-20-89）
+  project:     string              # 多项目隔离（单vault多项目，D13）
+  domain:      list[string]
+  maturity:    enum [seed, growing, evergreen, archived]   # L1 日志固定 evergreen（不可篡改的永久记录）
+  created:     date
+  last-touched: date
+  summary:     string              # ≤50 token，自包含（contextual prefix）
+  risk:        enum [normal, high] # 可选(默认normal)；high 就地强制上调确认档，覆盖全局 mode
+
+L2_edges:              # layer 2 卡片
+  k:           list[link]          # 父（上界）
+  v:           list[link]          # 子（下界）
+  e:           list[{target: link, rel: enum, weight: float 0-1}]   # 嵌套单轨：target 的 [[X]] 被链接引擎识别(反链/图谱/search)；rel/weight 是嵌套字段，Bases/Dataview 不可按其过滤(命门经本机 backlinks 实测更正，D21)
+  aliases:     list[string]        # 原生别名(取代 same_as，D22)：[[别名]] 自动解析 + 未链接提及匹配 + 供 MAP.yaml 归一
+  edge-policy: enum [required, exempt]   # 默认 required；type: summary 的 Atlas 导航节点设 exempt——边以正文导航列表表达，豁免 frontmatter k/v/e，改判"正文 wikilink 全可解析+auto区块非空+ROOT可达"(C 决策，扁平键 Bases 可查)
+  hub:         bool                # 枢纽标记（DP-5 方案A，corr-2026-11-16-58）：入度≥2 强语义边（implements/grounds/specializes，derives_from 不计）即标；深浅归升迁轴不混判。hub 卡须有 abstracts 解压路径（HUB_DECOMPRESSION 对账）。布尔语义（v2.12.0，corr-2026-11-18-65）：无引号 true/false 解析为布尔（YAML 同判），`hub: false` 合法=非枢纽；带引号 "false" 仍是字符串（YAML 亦真值），勿写。惯例仍推荐非枢纽卡省略此键（与存量一致）
+  secondary-type: enum [concept, claim, procedure, observation, entity, summary, pitfall, spec, log, report, correction, feedback]   # 双 type 过渡（DP-4）：须 ≠ type + 分化计划指针（存疑节/changelog）；「再结晶-分化」第三跃迁范式实践先行条文后立
+
+L2_auto:
+  provenance:  enum [manual, reflect, feedback, copied]   # 自动结晶卡标记，供抽查过滤；copied=赋能复制的上游条目（保留上游 id，豁免 id-namespace 前缀校验）
+  source:      string            # copied 佐证指针（v0.7.3）：上游条目 wikilink 或上游 id；copied 缺 source → ID_NAMESPACE WARN
+
+L1:                    # layer 1 日志（type: log，maturity 固定 evergreen）；正文 append-only 不可篡改，L2 卡则允许带 changelog 就地演进，D17
+  session-task: string
+  touched:     list[link]
+  reflect-to:  list[string]        # 派生指针：反思编译后回填（回填 frontmatter 不算篡改正文）
+  corrections: list[string]        # 派生指针：更正声明引用被更正日志 id
+
+L1_report:             # layer 1 申报报告（type: report，maturity 固定 evergreen，一经提交不可篡改；取代传统 issue，见 SPEC-GOVERN）
+  branch:        string            # 提交所在分支 contrib/{topic}-{date}
+  session-log:   string            # 关联会话日志 id
+  doctor-result: string            # 申报时 doctor 自检结果摘要
+
+L1_correction:         # layer 1 更正说明（type: correction，maturity 固定 evergreen，append-only；v0.7 新增，Owner 2026-11-12 授权）
+  target:      link                # 被更正的规格/卡 wikilink（如 [[SPEC-READ]]）
+  corrections: list[string]        # 回指被本说明取代的旧更正说明 id（可空）
+  # 落点 04-Logs/corrections/；独立模板 T-correction（正文三段：改了什么/为什么改/依据），非日志四段。
+  # **不进自动装配**：只做「顺规格指针按需展开」的深度；不结晶进 L2（U-1=不结晶）。
+  # 与情景日志同属 L1 链层但语义为 provenance 注脚，寄居情景层是务实复用（同 D21/D22）。
+
+script_volume:         # 脚本卷（type: script-volume）：统一文件接口下的异构节点（Unix「一切皆文件」同构），非知识条目（corr-2026-11-16-48）
+  # 复用成熟管治：身份/来源链/链接接入/连通/校验替代判据；不套用知识假设：layer/project/domain/maturity/summary/k/v/e/edge-policy/L1四段/SH知识域收录
+  required:            # 必填技术字段（VOL_FM，ERROR）
+    id:            string          # vol-{program}（见 id_format 注释）；全局唯一 + id↔文件名 stem↔source-of 同源
+    type:          script-volume
+    created:       date
+    last-touched:  date
+    source-of:     string          # 抽取落点=程序调用路径（如 90-Meta/scripts/entry_doctor.py），完整调用身份锚
+    fence:         string          # 代码围栏标记（"````"）
+    eol:           enum [crlf, lf]
+    sha256:        string          # 代码块实算 sha256（完整性锚，VOL_SHA256 对账，ERROR）；v0.7.3 起统一原始字节哈希（与 vol_extract 消费端同约定，eol 字段仅文档性元数据）
+  optional:            # 可选技术字段（v0.7.2 新增，corr-2026-11-16-51）
+    depends-on:    list[string]    # 依赖的卷 id 列表（如 [vol-ttl-locator]）；vol id 是依赖图主键（Owner 2026-11-16 裁②A）：撞名限定消歧/移动稳定/联邦 copied 可解。抽取器 vol_extract 按此递归拓扑抽取
+  validation:          # G 原理替代判据（豁免知识字段→必须立可计算判据）
+    VOL_FM:      ERROR             # 必填齐 + id 唯一 + 三源同源（撞名限定形态 vol-{dir}-{program} 亦合法）
+    VOL_FENCE:   ERROR             # 恰一个四反引号代码块、开闭围栏完整、语言标记 python
+    VOL_SHA256:  ERROR             # 代码块实算 sha256 == frontmatter 声明（原始字节，与 vol_extract 同约定）
+    VOL_DEPS:    ERROR             # depends-on 若存在：须为 vol id 列表 + 目标卷存在 + 无循环（v2.5.0）
+    VOL_NAME_DUP: ERROR            # 卷 basename 全局唯一（[[名#VERSION]] 按名解析，影子卷不得覆盖真值源；v2.7.0）
+    VOL_KNOWLEDGE_FIELD: ERROR     # 封闭世界白名单：卷禁带知识字段（layer/k/v/e/edge-policy/project/domain/maturity/summary/aliases 等；豁免是双向的，v2.7.0）
+    UNREACHABLE: WARN              # ROOT 可达（经路由或入链卡）；豁免 L2 边约束（无 k/v/e 要求）
+  provenance:          # 来源纪律（张力3：文件无内建来源/不可篡改语义，卷继承 TTL 来源链）
+    authority:     git             # Git 是版本权威；代码变更=改代码块+更新 sha256+commit 留痕
+    version_truth: code-VERSION    # 版本真值=代码块内 VERSION 常量（G20 对账源）；frontmatter 不镜像版本号
+    no_changelog:  true            # 卷内不嵌 changelog；重大修订可下沉 correction（可选）
+  federation:          # 赋能复制保上游 id + provenance: copied 豁免（同复制卡机制）；副库自带抽取步骤（Owner 裁 B）
+
+governance:            # 治理族节点（type: constraint/reference/status）：Agent-Governance 内迁（Process PEP 同构），非知识条目（corr-2026-11-16-57）
+  # 复用卷判例（G 原理）：豁免知识必填/layer/type↔layer → 立 GOV_* 可计算替代判据；封闭世界双向豁免。
+  # 三 type 语义分裂（P-3）：constraint=绑定约束（01~06/00-ENTRY/08-BLIND）；reference=不绑定参考（07-TERMS/导航/redirect）；status=可变单例当前态（STATUS）。
+  # 落点 05-Governance/（P-2 甲）；目录是导航不是权威，分权靠 type + 01-AUTHORITY 两条 precedence。
+  required:            # 必填字段（GOV_FM，ERROR）
+    id:            string          # gov-{yyyy}-{slug}；status 单例例外 gov-status（P-5）；全局唯一（ID_DUP 同判）
+    type:          enum [constraint, reference, status]
+    created:       date
+    last-touched:  date
+  conditional:         # 按 type 分派的条件必填（GOV_FM，ERROR；类别引擎 applies=governance 内部再分）
+    constraint:    { status: enum [ACTIVE, SUPERSEDED], priority: enum [P0, P1, P2], scope: enum [workspace-agent] }
+    status:        { status: enum [ACTIVE], scope: enum [workspace-agent] }   # 单例无 priority
+    reference:     { status: enum [ACTIVE, SUPERSEDED] }                      # priority/scope 可选
+  optional:
+    aliases:       list[string]    # 旧文件名/旧编号留解析（redirect 同款；治理族 aliases 合法，区别于卷）
+    self-referential: bool         # 治理自身的节点（00-ENTRY/01-AUTHORITY）标记
+    supersedes:    string          # SUPERSEDED 时必填指针（[[新节点]] 或 gov id；GOV_STATUS 判目标存在）
+    secondary-type: enum [constraint, reference, status]   # 双 type 过渡（DP-4）：须 ≠ type + 分化计划指针；「再结晶-分化」范式实践先行，条文后立
+  validation:          # G 原理替代判据（豁免知识字段→必须立可计算判据）
+    GOV_FM:        ERROR           # 必填齐 + 条件必填齐 + id 形态（gov-{yyyy}-{slug}/gov-status）+ priority/scope 枚举合法
+    GOV_STATUS:    ERROR           # status 枚举合法（type:status 仅 ACTIVE）；SUPERSEDED 须 supersedes 指针且目标存在
+    GOV_ENTRY:     WARN            # 过渡期（批1~3）：经 05-Governance/00-INDEX 导航锚可达（BFS 复用 compute_reachable）；批4 入口内迁后升 ERROR（经 00-ENTRY 入口链）
+    GOV_KNOWLEDGE_FIELD: ERROR     # 封闭世界白名单：治理族禁带知识字段（layer/k/v/e/edge-policy/project/domain/maturity/summary/spec-kind/trigger/session-task/touched/target/hub；aliases 合法）
+    GOV_SINGLETON: ERROR           # type:status 全库恰一个（gov-status）；>1 报后来者；批1~2 允许 0（STATUS 未迁），批3 起须恰 1
+    # GOV_NAME 暂缓（DP-6 零改名裁决：治理族编号是结构化标识符非生草，命名约定不适用；无可计算判据则不立规则，G 原理）
+  exclusion:
+    assembly:      never           # 不进检索装配（correction U-1 同款）
+    crystallize:   never           # 不结晶不升迁
+    federation:    never           # 不进副库复制名单；副库 doctor 见治理族判「非本库本体」不报错（ID_NAMESPACE 豁免 gov-* 前缀，封闭世界联邦延伸）
+  provenance:
+    authority:     git             # Git 是版本权威；约束条文修订走 03-CHANGE-DISCIPLINE + corr 留痕
+    redirect:      old-path-pointer  # 旧路径留 type:reference 指针文件（一行「已移至 [[新路径]]」）；历史引用经 redirect 仍可解析（Wikipedia redirect 同构）；redirect 不是第二权威（01-AUTHORITY §4）
+
+overview:              # 全景概览节点（type: overview）：纯人读项目地图（README），非知识条目，Agent 不加载（overview 内迁，corr-2026-11-20-89）
+  # 复用卷/治理族判例（G 原理）：豁免知识必填/layer/type↔layer → 立 OV_* 可计算替代判据；封闭世界双向豁免。
+  # 落点 03-Atlas/README.md；纯人读（Owner/使用者），不进 ROOT L0/SH-index 角色跳转，不进检索装配。
+  # 第四类别（knowledge/volume/governance/overview），类别引擎中央分派，判据互不泄漏。
+  required:            # 必填字段（OV_FM，ERROR）
+    id:            string          # ov-{yyyy}-{slug}（如 ov-2026-readme）；全局唯一（ID_DUP 同判）
+    type:          enum [overview]
+    created:       date
+    last-touched:  date
+    summary:       string          # ≤50 token（地图自述，非知识卡 summary）
+  optional:
+    aliases:       list[string]
+  validation:          # G 原理替代判据（豁免知识字段→必须立可计算判据）
+    OV_FM:         ERROR           # 必填齐 + id 形态（ov-{yyyy}-{slug}）+ type 枚举合法（枚举真值源=common.type，OV_FM 自带实现）
+    OV_KNOWLEDGE_FIELD: ERROR      # 封闭世界白名单：overview 禁带知识字段（layer/k/v/e/edge-policy/project/domain/maturity/hub/spec-kind/trigger/session-task/touched/target；aliases 合法）
+    # 断链沿 BROKEN_LINK(ERROR, all 规则)判，不另立 OV_LINK（G 原理要求替代判据但不要求重复判据；
+    #   overview 豁免的是"wikilink 全可解析+auto 区块+ROOT 可达"的导航契约，不是"链接目标存在"的基本诚实）。
+    # UNREACHABLE(WARN, all 规则)对 overview 显式豁免（doctor rule_unreachable 豁免集扩 overview；
+    #   overview 纯人读故意不挂 ROOT 路由，不豁免则恒报 WARN 自绊 0E/0W/0I 验收）。
+  exclusion:
+    assembly:      never           # 不进检索装配（Agent 永不加载，纯人读）；执行者=read_orchestrator 类别过滤（非仅声明，E 原理）
+    crystallize:   never           # 不结晶不升迁（reflect 只扫 04-Logs/logs+02-Cards，overview 不在收集面）
+    federation:    never           # 不进副库复制名单（副库 doctor 见 overview 判"非本库本体"不报错，ID_NAMESPACE 豁免 ov-* 前缀）
+  provenance:
+    authority:     git             # Git 版本权威；理念内容修订走 corr 留痕 + 出处锚点
+
+L3:                    # layer 3 规格/⚠️点
+  trigger:     enum [always, on-domain, on-file-pattern, on-project]
+  scope:       string
+  spec-kind:   enum [read, write, govern]  # 仅 type: spec 必填；type: pitfall 的 L3 卡用 trigger+scope，无 spec-kind
+
+rel_enum:
+  - depends_on
+  - derives_from
+  - contrasts_with
+  - generalizes
+  - specializes
+  - implements
+  - part_of
+  - co_occurs
+  - supersedes
+  - grounds        # 规格 → 支撑证据（L3→L2/L1）
+  - abstracts      # 枢纽 → 实例（L2→L2，implements 的逆；解压路径，DP-3 乙，corr-2026-11-16-58）
+
+budgets:             # 硬上限；裁剪执行者=read_orchestrator（装配时），doctor 不校验预算（v0.7.3 纠偏：原注释误称 entry_doctor 校验）
+  root_full:   2000 token
+  root_L0:     500 token
+  atlas_entry: 1000 token
+  card_summary: 50 token
+  assembly:    { L3: 2000, L2: 4000, L1: 1000 }   # 检索装配配额
+
+constraints:
+  - L2 卡至少一条边（k/v/e 任一），无边=孤岛；**例外**：`edge-policy: exempt`（如 type: summary 的 Atlas 导航节点）豁免此约束，改判"正文 wikilink 全可解析 + auto 区块非空 + ROOT 可达"。完整性检查四分（entry_doctor 负责）：orphan 孤岛(无任何边) / broken-link 断链(链接目标不存在，`obsidian unresolved` 只报这一类) / unreachable(ROOT 路由不可达) / stale(长期未用或已被取代，仅 L2 卡适用、L1 日志不判 stale)。⚠️ `obsidian unresolved` ≠ 孤岛检测，不可混用；断链优先调 CLI、离线才降级 Python 解析(B 决策)
+  - type↔layer 合法组合（entry_doctor 校验）：L1→log/report/correction（均 append-only 不可篡改）；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback；script-volume/constraint/reference/status/overview 为非知识条目，豁免 type↔layer（各按本类别节校验）
+  - overview 全景概览（type: overview，corr-2026-11-20-89）：纯人读项目地图（README），第四类别（knowledge/volume/governance/overview），落点 03-Atlas/README.md；豁免知识必填/layer/type↔layer，按 overview 节 OV_* 判据；不进 ROOT L0/SH-index 角色跳转、不进检索装配（read_orchestrator 类别过滤执行）、不结晶不升迁不进副库；UNREACHABLE 显式豁免（纯人读故意不挂路由）；断链沿 BROKEN_LINK(ERROR) 判；id 形态 ov-{yyyy}-{slug}
+  - id 全局唯一
+  - id 命名空间（联邦，见 id_namespace）：库根声明 `id-namespace: <slug>` 后，新建条目必须用本库前缀（`{kind}-{slug}-…`）；赋能复制的上游条目保留原 id 并标 `provenance: copied`（豁免前缀校验）；上提并入换主库号。未声明的主库豁免。entry_doctor 按 ID_NAMESPACE 校验
+  - L1 日志正文四段 + session-task/touched/结论 append-only 不可篡改（更正只能新开日志 + corrections 引用）；frontmatter 描述字段(schema 合规可回填) 与派生指针(reflect-to/corrections 由流程回填) 不在此限——回填 frontmatter 不算篡改正文；L2 卡允许带卡内 changelog 的就地演进；**L3 规格按微词反馈修订，修订说明下沉至 04-Logs/corrections/（type:correction），规格正文只留当前态 + `[[corr-…]]` 指针，不再内嵌 changelog**（v0.7，Owner 2026-11-12；D17 的 Git 兜底不变）
+  - 底层目录嵌套分化（v0.7）：`04-Logs/logs/`=情景日志（四段+recency+自动装配）；`04-Logs/corrections/`=更正说明（独立模板+不进自动装配+不结晶）。层号不变，顶层不新增目录。correction 用 T-correction 模板、target 必填、正文三段（改了什么/为什么改/依据），entry_doctor 按 type 分流校验
+  - 真安全红线绝对生效（敏感信息不入库/不执行来路不明代码/不接云端上传）；谨慎性约束随 operating_mode 分级（D15）
+
+## 修订说明（已下沉）
+
+自 schema v0.7 / Owner 2026-11-12 起，规格修订说明不再内嵌于本文件，下沉至 `04-Logs/corrections/`（type:correction，按需顺指针展开，不进自动装配）。
+
+本文件历史修订说明：[[corr-2026-09-25-30]], [[corr-2026-09-26-31]], [[corr-2026-09-26-32]], [[corr-2026-09-27-33]], [[corr-2026-09-27-34]], [[corr-2026-09-30-35]], [[corr-2026-11-12-36]], [[corr-2026-11-16-48]], [[corr-2026-11-16-51]], [[corr-2026-11-16-57]]。
+
+后续修订按 [[SPEC-WRITE#微词反馈流程（规格书自进化引擎，决策 D5/D12）|微词反馈流程]] 新增 correction 件并在此追加指针；Git 兜底回滚不变（D17）。

@@ -1,0 +1,31 @@
+# Obsidian UI state (high-frequency changes, not version-controlled)
+agents_vault/.obsidian/workspace.json
+agents_vault/.obsidian/workspace-mobile.json
+agents_vault/.obsidian/cache/
+agents_vault/.trash/
+
+# Plugins (may contain secrets in data.json; reinstall from community-plugins.json)
+agents_vault/.obsidian/plugins/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Script volumes: .py are transient runtime artifacts extracted from .md volumes
+# (single source of truth = 90-Meta/script-volumes/*.md; extract on use, delete after)
+agents_vault/90-Meta/scripts/*.py
+agents_vault/90-Meta/.cache/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temp / sensitive
+*.tmp
+*.bak
+.env
+secrets.*
+temp/
