@@ -1,0 +1,46 @@
+---
+id: "c-ansys-00004"
+layer: 2
+type: procedure
+project: ansys-automation
+domain: [knowledge-engineering, memory-governance]
+maturity: seed
+provenance: manual
+created: 2026-11-23
+last-touched: 2026-11-23
+summary: "SGC 脚本卷是 sha256 锚定件：批量文本处理（裁剪 wikilink/改 project）必须跳过卷正文，否则 VOL_SHA256 报错；Git 须 -text 禁 EOL 转换"
+k: []
+v: []
+e:
+  - { target: "[[副库建库引导]]", rel: implements, weight: 0.7 }
+  - { target: "[[entry_doctor校验清单与自检法]]", rel: co_occurs, weight: 0.5 }
+aliases: [卷完整性, VOL_SHA256防护]
+source: "ansys-automation 副库 vault/02-Cards/脚本卷字节完整性纪律.md（c-ansys-00004）；源日志 log-2026-11-14-01 / log-ansys-2026-11-23-04"
+---
+
+# 脚本卷字节完整性纪律
+
+## 定义
+
+SGC 脚本卷（90-Meta/script-volumes/*.md）的代码块以 frontmatter sha256 为完整性锚，任何对卷正文的字节改动（包括看似无害的文本替换）都会破坏校验与抽取。
+
+## 核心
+
+副库建库实战踩坑（ansys-automation，2026-11-23，Windows / Git autocrlf=true）：
+
+1. **批量裁剪碎锚**：建库第 4 步裁剪 wikilink / 改 project 字段的批量脚本扫过脚本卷正文 → 5 个卷 VOL_SHA256 ERROR（代码内含中文 wikilink 字符串被误替换）。
+2. **修复**：从上游字节原样重复制，仅在 frontmatter 插 provenance/source 两行；卷正文一个字节都不动。
+3. **Git EOL 碎锚**：autocrlf 环境下 CRLF↔LF 转换同样破坏 sha256 → 副库 `.gitattributes` 对卷与 .py 设 `-text`（`90-Meta/script-volumes/*.md -text`）。
+4. 推论：一切以内容哈希为完整性锚的文件（不限脚本卷），批量文本处理与版本管理器的 EOL 归一化都必须显式豁免。
+
+## 存疑
+
+- `-text` 防护在 core.autocrlf=false / Linux 环境非必需，但作为副库骨架默认无害；是否值得写进引导卡由维护者裁。
+- 本卡与引导卡坑清单是补充关系非冲突；若维护者认为应直接并入引导卡坑清单而非独立卡，接受合并处置。
+
+## 应用
+
+任何副库的批量文本处理脚本必须先排除 90-Meta/script-volumes/ 正文；re-sync 上游时按字节比对；Windows 副库建库时即配 .gitattributes。
+
+<!-- 交件注：本文件为 inbox 交件副本，保留副库原 id（c-ansys-00004）；并入时由验收方换主库号。
+     副库卡"核心"第 4 条原为治理族口径争议实例，已按 issue #1 建议与争议分离，移至 REPORT.md 冲突节。 -->
