@@ -2,12 +2,12 @@
 id: vol-entry-doctor
 type: script-volume
 created: 2026-11-16
-last-touched: 2026-11-20
+last-touched: 2026-11-24
 source-of: 90-Meta/scripts/entry_doctor.py
 fence: "````"
 eol: crlf
 depends-on: [vol-ttl-locator]
-sha256: d1387d53d089ee0b350e13a65336ee536af3ac41ccd132a8360824b78736a5f6
+sha256: 7728090a007862c140597702b52e31e8afea4de036888ecabd7d16c0fb7ea166
 ---
 ````python
 #!/usr/bin/env python3
@@ -49,6 +49,13 @@ on-file-pattern/on-project, schema L3.trigger) and a non-empty scope. Runtime tw
 of the session_start generator's fail-loud guard (CORRECT-1): the generator refuses
 at injection time, TRIGGER_FM keeps the structure honest at scan time; neither waits
 for the other. scope stays a non-empty check only (first version, no pattern grammar).
+
+v2.16.0 sub-vault federation fixes (first external cold-start, issue Guo337/sgc#1,
+corr-105): GOV_SINGLETON presence requirement exempts declared sub-vaults (ROOT
+id-namespace) — governance family is federation:never, sub-vault builds its own
+STATUS on its own schedule; STATUS_CLAIM check 5 (primary-vault historical anchor
+log-2026-11-14-01) likewise exempt for sub-vaults. Both were primary-vault
+centrism residuals: docs said "sub-vault not required", code demanded it.
 
 v2.15.0 atlas projection reconciliation (nav wave 2/3 knife F2, PLAN-nav-wave23-closure):
 ATLAS_GROUP (WARN) — SH auto-block groups are mechanically reconciled against
@@ -94,7 +101,7 @@ try:
 except Exception:
     pass
 
-VERSION = "2.15.0"
+VERSION = "2.16.0"
 STALE_DAYS = 180
 SUMMARY_SOFT_CHARS = 120          # rough character proxy for the "summary <= 50 tokens" rule
 
@@ -1653,14 +1660,16 @@ def rule_gov_knowledge_field(model, report):
 
 def rule_gov_singleton(model, report):
     """type:status is a vault-wide singleton (gov-status). >1 fires ERROR on the
-    later paths (sorted ownership, ID_DUP precedent). 0 is legal during batches
-    1-2 (STATUS not yet internalized); batch 3 adds the presence requirement."""
+    later paths (sorted ownership, ID_DUP precedent). Presence is required in the
+    primary vault (batch 3 onward); a declared sub-vault (ROOT id-namespace) is
+    exempt from presence -- governance family is federation:never, the sub-vault
+    builds its own STATUS on its own schedule (issue Guo337/sgc#1, corr-105)."""
     sts = sorted(rel for rel in model.governance
                  if isinstance(model.parsed[rel][0], dict)
                  and model.parsed[rel][0].get("type") == "status")
-    if len(sts) == 0 and model.vault_root:
+    if len(sts) == 0 and model.vault_root and not model.id_ns:
         report("05-Governance/", "ERROR", "GOV_SINGLETON",
-               "type:status 单例缺失（批3起恰1）",
+               "type:status 单例缺失（主库批3起恰1；副库豁免存在性）",
                "建 05-Governance/STATUS.md（id:gov-status, type:status）")
     if len(sts) > 1:
         for rel in sts[1:]:
@@ -1726,12 +1735,15 @@ def rule_status_claim(model, report):
                    "corrections 宣称 %s 件 != 磁盘 %d 件" % (m.group(1), corr_count),
                    "更新 STATUS corrections 计数为磁盘实测")
 
-    # 5. maturity declaration log exists (log-2026-11-14-01)
-    decl_log = os.path.join(root, "04-Logs", "logs", "log-2026-11-14-01.md")
-    if not os.path.isfile(decl_log):
-        report(rel, "ERROR", "STATUS_CLAIM",
-               "maturity 宣告 log 缺失（log-2026-11-14-01）",
-               "核验宣告留痕完整性")
+    # 5. maturity declaration log exists (log-2026-11-14-01) -- primary-vault
+    #    historical anchor only; a declared sub-vault (id-namespace) has its own
+    #    history and is exempt (issue Guo337/sgc#1, corr-105).
+    if not model.id_ns:
+        decl_log = os.path.join(root, "04-Logs", "logs", "log-2026-11-14-01.md")
+        if not os.path.isfile(decl_log):
+            report(rel, "ERROR", "STATUS_CLAIM",
+                   "maturity 宣告 log 缺失（log-2026-11-14-01）",
+                   "核验宣告留痕完整性")
 
     # 6. AUDITABLE declaration in V2-EXECUTION-RECORD
     v2_rec = os.path.normpath(os.path.join(
@@ -2834,8 +2846,17 @@ def self_test():
     ns_pres = [it for it in ns_issues if it["rule"] == "GOV_SINGLETON"
                and "缺失" in it["message"]]
     status_ok = status_ok and len(ns_pres) == 1
+    # v2.16.0 sub-vault exemption (issue Guo337/sgc#1): declared id-namespace +
+    # zero status nodes -> presence ERROR must NOT fire (primary still fires above)
+    sub_no_st = dict(no_st)
+    sub_no_st["00-ROOT.md"] = sub_no_st["00-ROOT.md"].replace(
+        "summary: root\n", "summary: root\nid-namespace: demo\n")
+    sub_issues, _, _ = analyze(sub_no_st, vault_root=".")
+    sub_pres = [it for it in sub_issues if it["rule"] == "GOV_SINGLETON"
+                and "缺失" in it["message"]]
+    status_ok = status_ok and not sub_pres
     print("  [%s] %-14s %s" % ("OK" if status_ok else "MISS", "STATUS_RULES",
-          "STATUS_SIZE WARN + GOV_SINGLETON presence 正确"))
+          "STATUS_SIZE WARN + GOV_SINGLETON presence 正确（主库缺失ERROR/副库id-namespace豁免）"))
     ok = ok and status_ok
     print("  [%s] %-14s %s" % ("OK" if gov_ok else "MISS", "GOV_RULES",
                                 "治理族契约正确（干净节点零告警豁免知识字段，GOV_FM/STATUS/ENTRY/KNOWLEDGE_FIELD/SINGLETON 各触发，知识规则不泄漏，副库 gov-* 豁免 ID_NAMESPACE）" if gov_ok else
