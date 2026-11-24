@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          for v in entry_doctor read_orchestrator rest_read append_log atlas_fill reflect session_start vol_extract ttl_locator; do
+          for v in entry_doctor read_orchestrator rest_read append_log atlas_fill reflect session_start vol_extract ttl_locator fed_sync; do
             f="agents_vault/90-Meta/scripts/$v.py"
             if grep -q -- "--self-test" "$f"; then
               echo "== self-test: $v =="

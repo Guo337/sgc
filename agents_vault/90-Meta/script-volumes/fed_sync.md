@@ -7,7 +7,7 @@ source-of: 90-Meta/scripts/fed_sync.py
 fence: "````"
 eol: crlf
 depends-on: []
-sha256: fb10afe75c1e769cc8ad7a2f7abd63e74e82a3eb29b4738f3d52c6441f71e5ad
+sha256: be9cee4e9edbf80a5a07e4defa0062c055273d163f3da20ec2d20800253b94d6
 ---
 ````python
 #!/usr/bin/env python3
@@ -40,7 +40,7 @@ import io
 import re
 import sys
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 H2_RE = re.compile(r"(?m)^##\s+(.+?)\s*$")
 
 
@@ -84,6 +84,8 @@ def _rcs_merge(base, local, upstream):
         out = []
         changed = False
         for tag, i1, i2, j1, j2 in ops:
+            if i1 == i2:
+                continue  # zero-width insert handled at boundary points
             if i2 <= a or i1 >= b:
                 continue
             if tag == "equal":
@@ -93,7 +95,36 @@ def _rcs_merge(base, local, upstream):
                 out.extend(side_lines[j1:j2])
         return out if changed else None
 
-    for a, b in zip(boundaries, boundaries[1:]):
+    def ins_at(ops, p, side_lines):
+        """Pure insertion at base position p (zero-width op), or None.
+        v0.1.1 fix: region walk over (a,b) pairs skipped zero-width ops,
+        silently dropping insertions (local deviation loss = contract breach)."""
+        for tag, i1, i2, j1, j2 in ops:
+            if i1 == i2 == p and tag == "insert":
+                return side_lines[j1:j2]
+        return None
+
+    for idx, a in enumerate(boundaries):
+        # insertions anchored at this boundary point (before base[a:])
+        li = ins_at(l_ops, a, local)
+        ui = ins_at(u_ops, a, upstream)
+        if li is not None and ui is not None:
+            if li == ui:
+                merged.extend(li)
+            else:
+                conflicts += 1
+                merged.append("<<<<<<< LOCAL")
+                merged.extend(li)
+                merged.append("=======")
+                merged.extend(ui)
+                merged.append(">>>>>>> UPSTREAM")
+        elif li is not None:
+            merged.extend(li)
+        elif ui is not None:
+            merged.extend(ui)
+        if idx + 1 >= len(boundaries):
+            break
+        b = boundaries[idx + 1]
         if a == b:
             continue
         lr = repl_for(l_ops, a, b, local)
@@ -145,10 +176,54 @@ def cmd_sections(args):
     return 0
 
 
+def _self_test():
+    """Regression suite for the merge fact feeder (v0.1.1 insertion fix)."""
+    def mg(b, l, u):
+        m, c = _rcs_merge(b.splitlines(), l.splitlines(), u.splitlines())
+        return "\n".join(m), c
+
+    cases = []
+    # 1 disjoint insertions both kept (was: silently dropped, v0.1.0 bug)
+    out, c = mg("A\nB\nC", "A\nX\nB\nC", "A\nB\nY\nC")
+    cases.append(("disjoint-insert", c == 0 and out == "A\nX\nB\nY\nC"))
+    # 2 delete + append
+    out, c = mg("A\nB\nC\nD", "A\nC\nD", "A\nB\nC\nZ")
+    cases.append(("delete-append", c == 0 and out == "A\nC\nZ"))
+    # 3 identical change both sides
+    out, c = mg("A\nB\nC", "A\nB2\nC", "A\nB2\nC")
+    cases.append(("same-change", c == 0 and out == "A\nB2\nC"))
+    # 4 head insertion local-only (was: dropped)
+    out, c = mg("A\nB", "X\nA\nB", "A\nB")
+    cases.append(("head-insert", c == 0 and out == "X\nA\nB"))
+    # 5 same-position different insertions = true conflict
+    out, c = mg("A\nB", "A\nX\nB", "A\nY\nB")
+    cases.append(("same-pos-conflict", c == 1 and "<<<<<<< LOCAL" in out
+                  and "X" in out and "Y" in out))
+    # 6 tail insertion upstream-only (was: dropped)
+    out, c = mg("A\nB", "A\nB", "A\nB\nZ")
+    cases.append(("tail-insert", c == 0 and out == "A\nB\nZ"))
+    # 7 unchanged both sides
+    out, c = mg("A\nB", "A\nB", "A\nB")
+    cases.append(("no-change", c == 0 and out == "A\nB"))
+    # 8 same-position identical insertions dedup
+    out, c = mg("A\nB", "A\nX\nB", "A\nX\nB")
+    cases.append(("same-insert-dedup", c == 0 and out == "A\nX\nB"))
+    # 9 sections report
+    secs = _sections("## S1\nx\n## S2\ny")
+    cases.append(("sections-parse", set(secs) == {"S1", "S2"}))
+    bad = [n for n, ok in cases if not ok]
+    if bad:
+        print("fed_sync --self-test: FAIL " + ", ".join(bad))
+        return 1
+    print("fed_sync --self-test: PASS (%d cases)" % len(cases))
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="federation spec re-sync three-way merge (offline, stdlib)")
     ap.add_argument("--version", action="version", version=VERSION)
-    sub = ap.add_subparsers(dest="cmd", required=True)
+    ap.add_argument("--self-test", action="store_true", help="run regression suite")
+    sub = ap.add_subparsers(dest="cmd", required=False)
     pm = sub.add_parser("merge", help="three-way merge base/local/upstream")
     pm.add_argument("--base", required=True)
     pm.add_argument("--local", required=True)
@@ -160,6 +235,10 @@ def main(argv=None):
     ps.add_argument("--upstream", required=True)
     ps.set_defaults(fn=cmd_sections)
     args = ap.parse_args(argv)
+    if args.self_test:
+        return _self_test()
+    if not args.cmd:
+        ap.error("a subcommand is required (merge/sections) or --self-test")
     return args.fn(args)
 
 

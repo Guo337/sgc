@@ -41,7 +41,7 @@ aliases: [Beta 闸门判据, Beta Gate Criteria]
 |---|---|---|
 | B1 | 🟢 候选达标 | 首个外部冷启动样本（ansys-automation，Guo337/sgc#1）：97 文件 0E 全链走通，重测确认闭环（corr-105/114） |
 | B2 | 🟡 等待 | 外部副库真实使用样本未回传；自然发生不造任务 |
-| B3 | 🟡 工程已落地，第二上提待验收 | re-sync 工程落地（corr-119：schema federation_class + doctor FED_* + fed_sync 卷 + SPEC-GOVERN 契约权威层 + 端到端 6 阶段样本含本地偏离）；修订权契约入权威层（corr-112/115/117）；第二上提候选 Guo337/sgc#2 待六步验收 |
+| B3 | 🟡 上提腿达标，真实跨库 re-sync 走通待自然触发 | re-sync 工程落地（corr-119：schema federation_class + doctor FED_* + fed_sync 卷 + SPEC-GOVERN 契约权威层 + 端到端 6 阶段样本含本地偏离）；修订权契约入权威层（corr-112/115/117）；**第二上提六步验收完成**（corr-122：Guo337/sgc#2 并入 c-2026-00037，Owner 终审） |
 | B4 | 🟢 候选达标 | CI 三平台首跑全绿（run 45453977853，corr-120）；人工双态首验留痕在案（2026-11-22）；bash 配方 Atlas §5 |
 | B5 | 🟢 候选达标 | 诚实边界节+KNOWN-LEAKY 台账+单写者醒目化已落；终检随本件发布一并做 |
 | B6 | ⬜ 待 B1–B5 | 逐项核验留痕后呈 Owner |
