@@ -8,7 +8,7 @@ project: memory-lib
 domain: [memory-governance]
 maturity: seed
 created: 2026-09-27
-last-touched: 2026-11-24
+last-touched: 2026-11-25
 summary: 治理规格书：定义"谁能改库、怎么并入"——开源式 branch→审核=并入→main、申报报告、doctor 闸门、角色与权限
 e:
   - { target: "[[SPEC-WRITE]]", rel: depends_on, weight: 0.8 }
@@ -90,7 +90,7 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 
 ## doctor 闸门（merge 前必过）
 
-`entry_doctor`（真值源=脚本卷 `agents_vault/90-Meta/script-volumes/entry_doctor.md`，只读、纯标准库；**P0 doctor gate 已落地 [[entry_doctor#VERSION|v2.18.0]]**）作为并入 main 的 CI 闸门。**信任前置（v2.7.0，独立评估 S1 闭合）**：信任一次扫描结果前，须先对同一抽取件跑 `--self-test` 且 rc=0——sha256 是自证锚（能改库者能改 doctor 并重算 sha），self-test 是真破坏性探针（阉割版必 MISS），强制前置即 POST 式自检；doctor 卷任何代码改动必附 correction。外部信任根=git 历史 + Owner 裁判，不做外置签名。
+`entry_doctor`（真值源=脚本卷 `agents_vault/90-Meta/script-volumes/entry_doctor.md`，只读、纯标准库；**P0 doctor gate 已落地 [[entry_doctor#VERSION|v2.18.1]]**）作为并入 main 的 CI 闸门。**信任前置（v2.7.0，独立评估 S1 闭合）**：信任一次扫描结果前，须先对同一抽取件跑 `--self-test` 且 rc=0——sha256 是自证锚（能改库者能改 doctor 并重算 sha），self-test 是真破坏性探针（阉割版必 MISS），强制前置即 POST 式自检；doctor 卷任何代码改动必附 correction。外部信任根=git 历史 + Owner 裁判，不做外置签名。
 
 **运行方式（“做Doctor”）**：.py 无常驻文件（gitignore，用时抽取）——先从卷二进制抽取 .py（开围栏 ````python 定位、闭围栏 rindex、切片 data[s:e]、比 frontmatter sha256），再执行 `python <抽取件> --vault <库根>`（抽取件放 scripts/ 下时省略 `--vault` 可自动定位库根 = `__file__` 的 `../..`）。**抽取件运行完毕后删除（含 `__pycache__`）；`scripts/` 常驻 .py 仅限冻结实验仪器（见 [[corr-2026-11-16-56]]），runtime 抽取件不得常驻**（「用完即删」动作指令，corr-56；此前仅 gitignore 注释承载，规范文本缺位致跳步实证）。**默认离线扫工作树**——一致性优先，且 App 未运行时兜底；**App 在跑时加 `--use-cli`** 叠加官方第一方 `obsidian` CLI（D23，**可完全依赖的主通道**）做 `version`/`unresolved` **自动对账**（分类：一致/离线误报/CLI 漏判/非 wikilink 目标，真分歧升 WARN；**v2.2.0 起过滤 CLI 空结果哨兵串** `No unresolved links found.`，避免误判断链目标升假 WARN），CLI 不可用则优雅降级离线（本机实测：批次1 清净后库内无 unresolved，`obsidian unresolved` 返回空结果哨兵→v2.2.0 正确过滤、自动对账四项皆“无”、闸门 0/0/0；App 关→`TimeoutExpired` 降级，两态均 PASS）。`--self-test` 跑内置破坏性 fixture 自检（全部注册规则 + BROKEN_SET + ID_NAMESPACE + VOL_RULES + VOL_DEPS + GOV_RULES + OV_RULES + HUB_RULES + DOC_IMPL_DRIFT + PARSER_V27 + CLI_RECONCILE + CLI_VAULT_PIN + CLI_UTF8_DECODE，应全 OK）；`--json` 输出稳定机读 schema。退出码 `0`=无 ERROR / `1`=有 ERROR / `2`=工具自身失败。见 [[corr-2026-11-16-49]]。
 
@@ -147,7 +147,7 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 
 ## 联邦规格修订权（re-sync 契约，corr-112/117/119）
 
-副库从主库赋能复制规格（SPEC-READ/WRITE/GOVERN + schema，`provenance: copied`）后，本地修订与上游演进按本契约治理。**主库自有规格不触发本契约**（无上游基线）；执行者=doctor FED_* 三判据 + re-sync 工具。
+副库从主库赋能复制规格（SPEC-READ/WRITE/GOVERN + schema，`provenance: copied`）后，本地修订与上游演进按本契约治理。**主库自有规格不触发本契约**（无上游基线）；执行者=doctor FED_* 三判据 + re-sync 工具。**同步/升级任务归维护者身份**（SH-index 路由）：读侧仍按 SPEC-READ 通道分流，字节比对与写侧落盘才是磁盘操作（issue Guo337/sgc#4：维护任务被心智建模为文件操作时 SH 义务不进视野；vol_extract/fed_sync stdout 头部有同款提示）。
 
 - **权威双轨**（a）：上游=版本主线权威（diff 基准）；本库=运行实例权威（本地生效文本）。两轨不互相覆盖，升级=三方合并。
 - **分区三级**（b/c）：schema `federation_class` 机读管辖表（载体=外置清单，第三方比对裁甲）——`redline`（换项目必须成立，不可本地改）/ `parameter`（本项目取值合理别项目亦可，可改须声明）/ `free`（副库自建件，不属 copied 管辖）/ `mixed`（节红线+参数白名单，D1 首版白名单空逐项签认开白）。**未列入表的 copied 规格节默认 redline**（fail-safe）。键=逐字实物 H2 标题/顶层键，失锚 fail-loud（FED_VERSION ERROR）。

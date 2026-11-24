@@ -2,11 +2,11 @@
 id: vol-vol-extract
 type: script-volume
 created: 2026-11-16
-last-touched: 2026-11-16
+last-touched: 2026-11-25
 source-of: 90-Meta/scripts/vol_extract.py
 fence: "````"
 eol: crlf
-sha256: 79154cef8130ddeb7f03b05c23dda22ddecb120b68a91c1baed338937e0cc4c3
+sha256: 97014f7b2e51e8b4fa09b184f93503ac05a672bda58f91e514e9610615455b35
 ---
 ````python
 #!/usr/bin/env python3
@@ -35,7 +35,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 OF = b"````python\r\n"
 CF = b"\r\n````\r\n"
@@ -218,6 +218,10 @@ def main():
 
     if a.self_test:
         return self_test()
+
+    # SH reminder (issue Guo337/sgc#4): maintenance tasks are library operations;
+    # the read side still follows SPEC-READ channel routing. One line,必经执行点.
+    print("提示：本工具仅做字节级抽取/合并；读库内容（规格/卡/frontmatter）仍走 SH 通道分流（REST/CLI，SPEC-READ 访问通道节）——库维护/同步任务也是库操作（issue Guo337/sgc#4）。")
 
     # resolve vault root
     vault = a.vault

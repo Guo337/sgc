@@ -8,7 +8,7 @@ maturity: seed
 provenance: manual
 edge-policy: exempt
 created: 2026-11-20
-last-touched: 2026-11-20
+last-touched: 2026-11-25
 summary: Agent 身份根：大类身份跳转与域目录指针；角色任务只读角色件
 ---
 
@@ -19,7 +19,7 @@ summary: Agent 身份根：大类身份跳转与域目录指针；角色任务�
 > 不越权义务（全角色通用）：许可有出处、提案不洗成决定、疑越权即停呈裁——[[不越权纪律]]「核心」节；给下游写任务书只装目标/边界/验收，身份通道指 SH 不手抄。
 
 <!-- atlas:auto-start -->
-- 改本库（卡/规格/工具链）→ 维护者入口 [[role-ke-maintainer]]
+- 改本库（卡/规格/工具链/同步升级 re-sync）→ 维护者入口 [[role-ke-maintainer]]（库维护/同步任务也是库操作，读侧仍走 SH 通道分流，issue Guo337/sgc#4）
 - 只读用知识（不写库）→ 消费者入口 [[role-ke-consumer]]
 - 建副库/上提 → 联邦入口 [[role-ke-federation]]
 - 独立验收/评审（不改产出）→ [[role-ke-auditor]]

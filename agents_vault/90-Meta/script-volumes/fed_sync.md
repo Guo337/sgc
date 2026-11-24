@@ -7,7 +7,7 @@ source-of: 90-Meta/scripts/fed_sync.py
 fence: "````"
 eol: crlf
 depends-on: []
-sha256: be9cee4e9edbf80a5a07e4defa0062c055273d163f3da20ec2d20800253b94d6
+sha256: bcf27c84245c948fed235ec2ed7f24be18cb67d330d048e3eb7ce4886313c30f
 ---
 ````python
 #!/usr/bin/env python3
@@ -40,7 +40,7 @@ import io
 import re
 import sys
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 H2_RE = re.compile(r"(?m)^##\s+(.+?)\s*$")
 
 
@@ -237,6 +237,9 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.self_test:
         return _self_test()
+
+    # SH reminder (issue Guo337/sgc#4): same contract as vol_extract.
+    print("提示：本工具仅做字节级抽取/合并；读库内容（规格/卡/frontmatter）仍走 SH 通道分流（REST/CLI，SPEC-READ 访问通道节）——库维护/同步任务也是库操作（issue Guo337/sgc#4）。")
     if not args.cmd:
         ap.error("a subcommand is required (merge/sections) or --self-test")
     return args.fn(args)

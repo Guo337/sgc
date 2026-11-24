@@ -7,7 +7,7 @@ source-of: 90-Meta/scripts/entry_doctor.py
 fence: "````"
 eol: crlf
 depends-on: [vol-ttl-locator]
-sha256: 0ebc8bceff6feed00b53944ebff157e1aa6d9f377b668e724d152b17b3f2017b
+sha256: 21b27f5e4337742a30220e51e508ac70df25e4546a8bd9fd5624e5a019beb7c9
 ---
 ````python
 #!/usr/bin/env python3
@@ -49,6 +49,16 @@ on-file-pattern/on-project, schema L3.trigger) and a non-empty scope. Runtime tw
 of the session_start generator's fail-loud guard (CORRECT-1): the generator refuses
 at injection time, TRIGGER_FM keeps the structure honest at scan time; neither waits
 for the other. scope stays a non-empty check only (first version, no pattern grammar).
+
+v2.18.1 upstream-cache hard skip (external sub-vault report, issue Guo337/sgc#3,
+corr-126): 90-Meta/upstream/ baseline snapshots were scanned as vault content,
+producing false BROKEN_LINK (upstream corr pointers), ID_DUP (snapshot shares the
+copied spec's id by contract) and ID_NAMESPACE (upstream ids carry no sub-vault
+prefix). "upstream" joins HARD_SKIP (inbox precedent: NON-AUTHORITY snapshot
+workspace, neither validated nor a link target). FED_* rules are unaffected:
+_fed_cache_baseline and FED_VERSION's has_cache both fall back to a direct disk
+read. Self-test FED_RULES gains a regression fixture: a raw upstream snapshot
+(unresolvable corr link + duplicate upstream id) must yield zero issues.
 
 v2.17.0 project hosting zone (06-Project/, Owner v3 ruling, corr-2026-11-24-110):
 fifth node category alongside knowledge/volume/governance/overview — project-spec
@@ -122,7 +132,7 @@ try:
 except Exception:
     pass
 
-VERSION = "2.18.0"
+VERSION = "2.18.1"
 STALE_DAYS = 180
 SUMMARY_SOFT_CHARS = 120          # rough character proxy for the "summary <= 50 tokens" rule
 
@@ -224,8 +234,11 @@ SKIP_DIRS = {"Templates", ".obsidian", ".git", "community-research",
 # Hard skip: neither validated nor treated as a link target (VCS / config / third-party snapshots)
 # inbox = NON-AUTHORITY upstream-submission workspace (sub-vault cards in transit,
 # not formal vault content); excluded from validation and link-target set.
+# upstream = 90-Meta/upstream/ raw baseline snapshots (SPEC-GOVERN federation e):
+# same semantics — upstream corr pointers / upstream ids are not sub-vault content
+# (issue Guo337/sgc#3). FED_* reads the cache from disk, independent of this skip.
 HARD_SKIP = {".obsidian", ".git", "community-research",
-             "node_modules", "__pycache__", ".trash", "inbox"}
+             "node_modules", "__pycache__", ".trash", "inbox", "upstream"}
 # Skip validation only, but still a legal link target (e.g. T-log/T-report under Templates)
 VALIDATE_SKIP = SKIP_DIRS
 
@@ -2366,7 +2379,24 @@ def analyze(files, extra_resolvable=None, vault_root=None):
     """files: {relpath(posix): text} -> (issues, counts, broken). issue = dict(file, level, rule, message, fix).
     Builds a read-only VaultModel, then dispatches each registered rule. Rules are stateless;
     the engine collects diagnostics. Output ordering is normalized by output() (file, level, rule)."""
-    model = VaultModel(files, extra_resolvable, vault_root=vault_root)
+    # HARD_SKIP is a loading-layer contract (load_vault prunes the walk); enforce it
+    # here too so in-memory callers get identical semantics. 90-Meta/upstream/ raw
+    # baseline snapshots are not vault content (issue Guo337/sgc#3): scanning them
+    # produced false BROKEN_LINK/ID_DUP/ID_NAMESPACE. The model is built WITHOUT
+    # them (no id/title/link pollution); the texts are then re-attached to
+    # model.files only, because FED_* baseline/has_cache read the cache from there.
+    hard_skipped = {rel: txt for rel, txt in files.items()
+                    if any(p in HARD_SKIP for p in rel.split("/")[:-1])}
+    model = VaultModel({rel: txt for rel, txt in files.items()
+                        if rel not in hard_skipped},
+                       extra_resolvable, vault_root=vault_root)
+    model.files.update(hard_skipped)
+    # cross rules may iterate model.files and index model.parsed (e.g.
+    # _fed_copied_specs): give skipped texts a parsed entry with fm=None so they
+    # are visible as raw text but never classified as knowledge/content.
+    for rel, txt in hard_skipped.items():
+        model.parsed[rel] = (None, "", txt)
+        model.graph_texts[rel] = ""   # rules iterating model.files may index this
     issues = []
     broken = set()
 
@@ -2378,9 +2408,20 @@ def analyze(files, extra_resolvable=None, vault_root=None):
             if m:
                 broken.add(m.group(1))
 
+    # Dispatch views keep hard-skipped TEXTS in sub.files (cross rules like FED_*
+    # read the upstream cache from there) but the model's validation aggregates
+    # (parsed/ids/titles/graph) were built without them, so they are never
+    # validated nor counted as link targets — loading-layer semantics for
+    # in-memory callers (issue Guo337/sgc#3).
     for rule in RULES:
         if rule.applies == ("all",):
-            rule.fn(model, report)
+            sub = VaultModel.__new__(VaultModel)
+            sub.__dict__.update(model.__dict__)
+            # cross rules (FED_*) read raw hard-skipped texts (upstream cache);
+            # file/link/graph rules must not see them at all.
+            sub.files = {rel: txt for rel, txt in model.files.items()
+                         if rel not in hard_skipped or rule.scope == "cross"}
+            rule.fn(sub, report)
         else:
             # Central applicability dispatch (RC4): the rule sees a category-filtered
             # view; per-rule guards are no longer the enforcement point.
@@ -2397,7 +2438,11 @@ def analyze(files, extra_resolvable=None, vault_root=None):
                 allowed |= model.project
             sub = VaultModel.__new__(VaultModel)
             sub.__dict__.update(model.__dict__)
-            sub.files = {rel: txt for rel, txt in model.files.items() if rel in allowed}
+            # cross rules keep hard-skipped raw texts visible (FED_* upstream
+            # cache); validation aggregates were built without them, so they are
+            # still never validated.
+            sub.files = {rel: txt for rel, txt in model.files.items()
+                         if rel in allowed or (rule.scope == "cross" and rel in hard_skipped)}
             rule.fn(sub, report)
 
     counts = {"error": 0, "warn": 0, "info": 0}
@@ -3609,6 +3654,21 @@ def self_test():
     }
     fi, _, _ = analyze(fed_files)
     fed_clean = not [x for x in fi if x["rule"].startswith("FED_")]
+    # issue Guo337/sgc#3 regression: a RAW upstream snapshot (not the minimal
+    # fixture above) carries upstream corr pointers and the same id as the local
+    # copied spec. It must be hard-skip-exempt: zero issues on the snapshot file
+    # (no false BROKEN_LINK / ID_DUP / ID_NAMESPACE), FED_* still reads the cache.
+    fed_raw = dict(fed_files)
+    fed_raw["90-Meta/upstream/SPEC-READ.md"] = (
+        "---\nid: spec-read\ntype: spec\nupstream-commit: abc123\n"
+        "sha256: 0000\nupstream-version: v1\n---\n# SPEC-READ up\n"
+        "## 职责边界\n读取分权。\n"
+        "## 装配预算（硬上限）\nL3 2000。\n"
+        "## 修订说明（已下沉）\n上游史，修订见 [[corr-2099-01-01-01]]。\n")
+    rawi, _, _ = analyze(fed_raw)
+    fed_raw_ok = (not [x for x in rawi if x["file"].startswith("90-Meta/upstream/")]
+                  and not [x for x in rawi if x["rule"].startswith("FED_")])
+    fed_clean = fed_clean and fed_raw_ok
     # undeclared deviation on mixed section -> FED_DECL ERROR + FED_REDLINE ERROR
     # (mixed = redline + empty whitelist; undeclared change is unauthorized)
     fed_und = dict(fed_files)
@@ -3661,7 +3721,7 @@ def self_test():
               and fed_empty_ok and fed_nocache_ok and fed_stale_ok and fed_main_ok)
     ok = ok and fed_ok
     print("  [%s] %-14s %s" % ("OK" if fed_ok else "MISS", "FED_RULES",
-                                "联邦修订权契约正确（干净copied零告警，未声明偏离ERROR/红线改动ERROR/已声明豁免/空声明WARN/缺缓存WARN/键失锚ERROR/主库自有规格不触发）" if fed_ok else
+                                "联邦修订权契约正确（干净copied零告警，未声明偏离ERROR/红线改动ERROR/已声明豁免/空声明WARN/缺缓存WARN/键失锚ERROR/主库自有规格不触发/上游快照硬跳过零假报）" if fed_ok else
                                 "FED_* 触发或豁免不符预期"))
     # pitfall trigger contract: missing/illegal trigger + missing/empty scope fire;
     # compliant pitfall clean (red-before-green, knife F1)
