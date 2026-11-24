@@ -7,7 +7,7 @@ source-of: 90-Meta/scripts/rest_read.py
 fence: "````"
 eol: crlf
 depends-on: [vol-ttl-locator]
-sha256: 355c2c763a7ce3231e428f96538d21efa220da45add89712002ba11201008ceb
+sha256: 5843b20c6037d5a5bc01127605cb3358514f0c6d68477c1e70c3419f17036144
 ---
 ````python
 #!/usr/bin/env python3
@@ -73,7 +73,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 # Read-only allowlist of routes this helper will ever touch. Anything outside
 # this set is refused by construction (the helper has no write code path).
@@ -274,6 +274,58 @@ def cmd_probe(vault: str) -> int:
                      % (info.get("id", "?"), info.get("version", "?"),
                         manifest.get("status", "?")))
     sys.stdout.write("identity probe PASS: 00-ROOT.md sha256=%s (REST==disk)\n" % h[:16])
+    # SH pointer at the physical choke point every REST consumer passes
+    # (corr-127 philosophy: thin guardrail, reachable without reading specs).
+    sys.stdout.write("身份与义务包：03-Atlas/SH-index.md（先认身份再读知识，SPEC-READ §入口 6）\n")
+    return 0
+
+
+# Directories scanned by `resolve`. Fixed allowlist keeps the GET count small
+# and the surface read-only; extend only with an explicit ruling.
+RESOLVE_DIRS = ("02-Cards", "01-Specs", "03-Atlas")
+RESOLVE_MAX_DEPTH = 4
+
+
+def resolve_name(client, name: str):
+    """Exact basename match over directory listings. Returns (hits, scanned).
+
+    Facts only: no substring, no fuzzy, no alias lookup (aliases would need
+    per-file frontmatter GETs -- out of scope for this thin fact feeder).
+    Multiple hits are ALL returned (a name collision is a fact for the caller
+    to adjudicate, never silently resolved to the first match).
+    """
+    target = name if name.endswith(".md") else name + ".md"
+    hits, scanned = [], []
+
+    def walk(rel_dir, depth):
+        scanned.append(rel_dir or "/")
+        _, data = client.list_dir(rel_dir)
+        for entry in data.get("files", []):
+            if entry.endswith("/"):
+                if depth < RESOLVE_MAX_DEPTH:
+                    sub = (rel_dir + "/" + entry.rstrip("/")) if rel_dir \
+                        else entry.rstrip("/")
+                    walk(sub, depth + 1)
+            elif entry == target:
+                hits.append((rel_dir + "/" + entry) if rel_dir else entry)
+
+    for d in RESOLVE_DIRS:
+        walk(d, 1)
+    return hits, scanned
+
+
+def cmd_resolve(vault: str, name: str) -> int:
+    client = _client(vault)
+    identity_probe(client, vault)
+    hits, scanned = resolve_name(client, name)
+    if not hits:
+        sys.stdout.write("resolve GAP: 「%s」精确名未命中（非别名/非语义匹配）。"
+                         "已扫目录：%s\n" % (name, ", ".join(scanned)))
+        return 1
+    for h in hits:
+        sys.stdout.write(h + "\n")
+    if len(hits) > 1:
+        sys.stdout.write("（同名多命中 %d 件，全部列出供裁，不静默取首）\n" % len(hits))
     return 0
 
 
@@ -502,16 +554,74 @@ def self_test() -> int:
             msg = str(e)
             check("HEADING_404_FACTS",
                   "404" in msg and "真实H1" in msg and "真实H2（v2.0）" in msg)
+
+        # 15. resolve: unique exact hit returns the correct relative path
+        class DirFake:
+            def __init__(self, tree):
+                self.tree = tree
+                self.calls = []
+
+            def list_dir(self, rel):
+                self.calls.append(rel)
+                return 200, {"files": self.tree.get(rel, [])}
+
+        tree = {
+            "02-Cards": ["甲卡.md", "incubator/"],
+            "02-Cards/incubator": ["乙卡.md"],
+            "01-Specs": ["SPEC-READ.md"],
+            "03-Atlas": ["SH-index.md", "knowledge-engineering/"],
+            "03-Atlas/knowledge-engineering": ["roles/"],
+            "03-Atlas/knowledge-engineering/roles": ["role-ke-consumer.md"],
+        }
+        df = DirFake(tree)
+        hits, scanned = resolve_name(df, "role-ke-consumer")
+        check("RESOLVE_UNIQUE",
+              hits == ["03-Atlas/knowledge-engineering/roles/role-ke-consumer.md"])
+
+        # 16. resolve: same basename in two dirs -> BOTH listed, never first-only
+        tree2 = dict(tree)
+        tree2["01-Specs"] = ["SPEC-READ.md", "甲卡.md"]
+        hits2, _ = resolve_name(DirFake(tree2), "甲卡")
+        check("RESOLVE_MULTI",
+              hits2 == ["02-Cards/甲卡.md", "01-Specs/甲卡.md"])
+
+        # 17. resolve: zero hit -> empty hits + scanned facts (GAP, no guessing)
+        hits3, scanned3 = resolve_name(DirFake(tree), "不存在的卡")
+        check("RESOLVE_GAP", hits3 == [] and "02-Cards" in scanned3
+              and "03-Atlas/knowledge-engineering/roles" in scanned3)
+
+        # 18. resolve: substring / case variants do NOT match (exact, not fuzzy)
+        h_sub, _ = resolve_name(DirFake(tree), "甲")          # substring
+        h_case, _ = resolve_name(DirFake(tree), "spec-read")  # case variant
+        check("RESOLVE_EXACT", h_sub == [] and h_case == [])
+
+        # 19. resolve: read-only surface -- only directory GETs (trailing slash)
+        captured_calls = []
+
+        class ResolveCapture(RestClient):
+            def __init__(self):
+                pass
+
+            def _request(self, method, path, accept=None, content_type=None,
+                         body=None):
+                captured_calls.append((method, path))
+                return 200, json.dumps({"files": []})
+
+        resolve_name(ResolveCapture(), "x")
+        check("RESOLVE_READONLY",
+              all(m == "GET" and p.startswith("/vault/") and p.endswith("/")
+                  for m, p in captured_calls) and len(captured_calls) >= 3)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
     if failures:
         sys.stdout.write("SELF-TEST FAIL: %s\n" % ", ".join(failures))
         return 1
-    sys.stdout.write("SELF-TEST PASS (14 rules: config http/https/nokey, "
-                     "identity match/mismatch, readonly surface, "
+    sys.stdout.write("SELF-TEST PASS (19 rules: config http/https/nokey, "
+                     "identity match/mismatch/crlf, readonly surface, "
                      "search post+query, jsonlogic CT, heading "
-                     "url/append/exclusive/tree/ok/404-facts)\n")
+                     "url/append/exclusive/tree/ok/404-facts, "
+                     "resolve unique/multi/gap/exact/readonly)\n")
     return 0
 
 
@@ -540,6 +650,11 @@ def build_parser():
     ps.add_argument("query")
     ps.add_argument("--context-length", type=int, default=50)
     sub.add_parser("tags", help="list tags")
+    prs = sub.add_parser("resolve",
+                         help="exact basename -> vault path(s); facts only "
+                              "(no alias/semantic routing -- that stays with "
+                              "read_orchestrator)")
+    prs.add_argument("name", help="note name, with or without .md")
     return p
 
 
@@ -571,6 +686,8 @@ def main(argv=None) -> int:
             return cmd_search(vault, args.query, args.context_length)
         if args.cmd == "tags":
             return cmd_tags(vault)
+        if args.cmd == "resolve":
+            return cmd_resolve(vault, args.name)
     except RestReadError as e:
         sys.stdout.write("REST read failed: %s\n" % e)
         return 1
