@@ -1,0 +1,60 @@
+# B4 doctor gate CI (Beta freeze criterion, corr-107 ruling ②).
+# Scope-freeze exemption: runs ONLY the existing read-only toolchain
+# (vol_extract -> entry_doctor -> per-volume --self-test) across a 3-platform
+# matrix. No vault writes, no new knowledge authority, no governance change.
+# Evidence per cell = this workflow's run log (B4: tool x platform matrix).
+name: doctor-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Bootstrap the extractor from its volume (byte-exact CRLF slice; the
+      # .gitattributes -text mark keeps volume bytes verbatim on every platform).
+      - name: Bootstrap vol_extract
+        shell: bash
+        run: |
+          python -c 'import os;d=open("agents_vault/90-Meta/script-volumes/vol_extract.md","rb").read();o=b"````python\r\n";c=b"\r\n````\r\n";s=d.index(o)+len(o);e=d.rindex(c);os.makedirs("agents_vault/90-Meta/scripts",exist_ok=True);open("agents_vault/90-Meta/scripts/vol_extract.py","wb").write(d[s:e])'
+
+      - name: Extract all volumes (sha256 reconciled)
+        shell: bash
+        run: python agents_vault/90-Meta/scripts/vol_extract.py --all --vault agents_vault
+
+      - name: Doctor scan (offline, 0 ERROR required)
+        shell: bash
+        run: python agents_vault/90-Meta/scripts/entry_doctor.py --vault agents_vault
+
+      # Trust precondition (SPEC-GOVERN): self-test BEFORE trusting a scan.
+      # Each volume that ships a self-test must exit 0 on every platform.
+      - name: Per-volume self-tests
+        shell: bash
+        run: |
+          set -e
+          for v in entry_doctor read_orchestrator rest_read append_log atlas_fill reflect session_start vol_extract ttl_locator; do
+            f="agents_vault/90-Meta/scripts/$v.py"
+            if grep -q -- "--self-test" "$f"; then
+              echo "== self-test: $v =="
+              python "$f" --self-test
+            fi
+          done
+
+      - name: Read-only retrieval probe (offline)
+        shell: bash
+        run: python agents_vault/90-Meta/scripts/read_orchestrator.py --probe "doctor" --vault agents_vault --channel offline --json
