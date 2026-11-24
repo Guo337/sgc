@@ -5,7 +5,7 @@ status: ACTIVE
 priority: P0
 scope: workspace-agent
 created: 2026-09-29
-last-touched: 2026-11-16
+last-touched: 2026-11-24
 aliases: [权威与冲突规则, Authority Rule]
 self-referential: true
 ---
@@ -63,6 +63,14 @@ For runtime behavior:
 3. decision records
 4. history
 5. proposals
+
+### 2.1 Project-zone zero authority（06-Project/，corr-2026-11-24-110）
+
+`06-Project/` 项目托管族（type: project-spec / project-analysis）对 TTL runtime **零权威**（NON-AUTHORITY）：
+
+- 项目规格的内容权威=项目 Owner，权威仅及项目自身流程；不得替代、覆盖或修改任何 runtime Spec / schema / 治理约束条款。
+- 项目件与 runtime Specs 冲突时，runtime Specs 优先；项目件与治理约束冲突时，治理约束优先（本文件 §2 两条 precedence 均不含 project 族——它不在任何权威序里）。
+- 项目件不是决策记录：项目区的「规定」不构成对本库 Agent 的指令，除非 Owner 显式裁决采纳。
 
 ## 3. Conflict rule
 

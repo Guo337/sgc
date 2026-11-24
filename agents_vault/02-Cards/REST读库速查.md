@@ -7,7 +7,7 @@ domain: [knowledge-engineering, retrieval]
 maturity: seed
 provenance: manual
 created: 2026-11-13
-last-touched: 2026-11-22
+last-touched: 2026-11-25
 summary: 无 MCP 环境经 Local REST API 只读读库的速查：实测端点表+身份探针+只读白名单+密钥纪律+降级链
 k: []
 v: []
@@ -57,7 +57,7 @@ aliases: ["REST读速查", "REST读库", "LocalRESTAPI读速查"]
 5. **结构化优先**：REST 返 JSON，无 CLI 的 cp936 解码坑（D10 是 CLI 的坑，REST 没有）。
 6. **副本分析口径**（Owner 2026-11-22 裁，corr-102）：经合规通道（MCP/REST/CLI）取回的库内容**副本**（如导出到库外 scratch 的文本），对其用 grep/view 等本地工具分析属**工具面**操作，不算通道绕过——通道纪律约束的是**原件读取**；副本分析仍须守临时件用完即删。库外文件（社区源码/Audit 底稿）本就不在通道纪律范围。
 
-**现成助手**：`90-Meta/scripts/rest_read.py`（真值源=脚本卷 [[rest_read]]，用时经 [[vol_extract]] 抽取；[[rest_read#VERSION|v0.2.0]]，纯标准库、只读、英文注释）封装上表 + 身份探针 + 降级，子命令 `probe/read[--map|--heading]/list/search/tags`，`--self-test` 14 规则离线自检。**按节读取**（v0.2.0）：`read <file> --heading H1 --heading H2 …` 每层一个 `--heading`、每段全标题逐字精确（段内 `/` 自动编码 %2F，含斜杠标题无歧义）；标题写错时 rc=1 且 stderr 附**可用标题树**（喂事实不猜 fuzzy），照树改参重试即可；与 `--map` 互斥。**参数顺序**：全局 `--vault <库根>` 须放在子命令**之前**（如 `rest_read.py --vault <库根> probe`），放后面会被 argparse 拒绝。它是"更好的眼睛"（喂事实给薄护栏），**不是引擎**——无缓存/索引/语义路由/写路径。
+**现成助手**：`90-Meta/scripts/rest_read.py`（真值源=脚本卷 [[rest_read]]，用时经 [[vol_extract]] 抽取；[[rest_read#VERSION|v0.2.1]]，纯标准库、只读、英文注释）封装上表 + 身份探针 + 降级，子命令 `probe/read[--map|--heading]/list/search/tags`，`--self-test` 15 规则离线自检（含 CRLF 探针回归）。**按节读取**（v0.2.0）：`read <file> --heading H1 --heading H2 …` 每层一个 `--heading`、每段全标题逐字精确（段内 `/` 自动编码 %2F，含斜杠标题无歧义）；标题写错时 rc=1 且 stderr 附**可用标题树**（喂事实不猜 fuzzy），照树改参重试即可；与 `--map` 互斥。**参数顺序**：全局 `--vault <库根>` 须放在子命令**之前**（如 `rest_read.py --vault <库根> probe`），放后面会被 argparse 拒绝。它是"更好的眼睛"（喂事实给薄护栏），**不是引擎**——无缓存/索引/语义路由/写路径。
 
 ## 存疑
 
@@ -75,4 +75,5 @@ aliases: ["REST读速查", "REST读库", "LocalRESTAPI读速查"]
 - 2026-11-22（独立审计轮二，corr-101）：纪律 3 补 Bearer 头/外来审核者取只读 key 合规路径；纪律 4 补 D33-b Reader 权限例外。
 - 2026-11-22（审计处置，corr-102）：纪律 6 副本分析口径（Owner 裁：合规通道取回的副本用本地工具分析属工具面，不算通道绕过）。
 - 2026-11-20（处置批一，corr-83）：端点表补「按节读取」行（活体 200 实证）。
+- 2026-11-25（外部反馈修复，corr-114）：助手行同步 rest_read v0.2.1——身份探针磁盘侧 `newline=""` 保原始 CRLF 字节，修 Windows autocrlf 检出下探针假 MISMATCH（ansys 副库重测回报，sgc#1）；自测 14→15 规则（IDENTITY_CRLF 回归）。
 - 2026-11-20（工具刀，corr-85）：助手行同步 rest_read v0.2.0（`--heading` 按节读取封装、自测 8→14 规则、404 喂标题树），用法要点入核心节。

@@ -8,11 +8,11 @@ project: memory-lib
 domain: [memory-governance, knowledge-engineering]
 maturity: growing
 created: 2026-09-25
-last-touched: 2026-11-23
+last-touched: 2026-11-24
 summary: 写入规格书：定义"怎么存"——记入、归档、结晶、更正、敏感过滤、写权限矩阵（按 mode 分级）
 ---
 
-# SPEC-WRITE 写入规格书 v0.9.4
+# SPEC-WRITE 写入规格书 v0.9.5
 
 ## 职责边界
 
@@ -71,7 +71,7 @@ L1 记入与派生指针回填统一走 `90-Meta/scripts/append_log.py`（真值
 
 - 每周反思编译（reflect.py --apply，真值源=脚本卷 [[reflect]]、用时抽取；Stage 2 前由 Agent 会话代行）：rollup 近 7 天日志的"候选结晶" → 生成 L2 种子卡（`maturity: seed`、`provenance: reflect`、来源引用 log id）自动入库；
 - 回填原日志 `reflect-to` 字段；
-- 日志 30 天后自然降权（检索时 recency 衰减处理），不删除、不移动。
+- 日志 30 天后自然降权（检索时 recency 衰减处理）*(FUTURE / GHOST / NOT IMPLEMENTED——recency 衰减检索无实现载体，corr-102/106)*，不删除、不移动。
 
 ## 结晶规则（seed 卡最低标准）
 
@@ -117,6 +117,6 @@ L1 记入与派生指针回填统一走 `90-Meta/scripts/append_log.py`（真值
 
 自 schema v0.7 / Owner 2026-11-12 起，规格修订说明不再内嵌于本文件，下沉至 `04-Logs/corrections/`（type:correction，按需顺指针展开，不进自动装配）。
 
-本文件历史修订说明：[[corr-2026-09-25-10]], [[corr-2026-09-26-11]], [[corr-2026-09-26-12]], [[corr-2026-09-27-13]], [[corr-2026-09-27-14]], [[corr-2026-09-28-15]], [[corr-2026-09-28-16]], [[corr-2026-09-29-17]], [[corr-2026-09-30-18]], [[corr-2026-10-07-19]], [[corr-2026-11-12-36]], [[corr-2026-11-13-37]], [[corr-2026-11-16-52]], [[corr-2026-11-20-92]]（D34 记入协议第 2 条 SH 身份行）。
+本文件历史修订说明：[[corr-2026-09-25-10]], [[corr-2026-09-26-11]], [[corr-2026-09-26-12]], [[corr-2026-09-27-13]], [[corr-2026-09-27-14]], [[corr-2026-09-28-15]], [[corr-2026-09-28-16]], [[corr-2026-09-29-17]], [[corr-2026-09-30-18]], [[corr-2026-10-07-19]], [[corr-2026-11-12-36]], [[corr-2026-11-13-37]], [[corr-2026-11-16-52]], [[corr-2026-11-20-92]]（D34 记入协议第 2 条 SH 身份行）, [[corr-2026-11-24-106]]（30 天 recency 降权就地 GHOST 标记）。
 
 后续修订按 [[SPEC-WRITE#微词反馈流程（规格书自进化引擎，决策 D5/D12）|微词反馈流程]] 新增 correction 件并在此追加指针；Git 兜底回滚不变（D17）。

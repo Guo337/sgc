@@ -7,7 +7,7 @@ source-of: 90-Meta/scripts/entry_doctor.py
 fence: "````"
 eol: crlf
 depends-on: [vol-ttl-locator]
-sha256: 7728090a007862c140597702b52e31e8afea4de036888ecabd7d16c0fb7ea166
+sha256: bcb417e14f37cae48b1da0357ec34ec969e3c80c5c52b723cc416b590fab05b4
 ---
 ````python
 #!/usr/bin/env python3
@@ -49,6 +49,27 @@ on-file-pattern/on-project, schema L3.trigger) and a non-empty scope. Runtime tw
 of the session_start generator's fail-loud guard (CORRECT-1): the generator refuses
 at injection time, TRIGGER_FM keeps the structure honest at scan time; neither waits
 for the other. scope stays a non-empty check only (first version, no pattern grammar).
+
+v2.17.0 project hosting zone (06-Project/, Owner v3 ruling, corr-2026-11-24-110):
+fifth node category alongside knowledge/volume/governance/overview — project-spec
+(06-Project/specs/) + project-analysis (06-Project/issues/, target backpointer to
+an L1 report) get PROJ_* alternative criteria (G principle, volume/governance/
+overview precedent); closed-world two-way exemption incl. federation fields
+(project content is never copied/promoted); PROJ_PLACEMENT binds type<->path both
+ways; PROJ_ENTRY anchors at 06-Project/00-INDEX (GOV_ENTRY final-form pattern);
+PROJ_EDGE_BAN keeps knowledge k/v/e edges off project nodes; UNREACHABLE exempts
+the family (PROJ_ENTRY is the entry contract's executor); ID_NAMESPACE exempts
+proj-*; CONTRACT_DRIFT reconciles project.required too. REPORT_FM closes an
+existing E-gap: schema L1_report declared branch/session-log/doctor-result
+required but doctor never enforced them (independent review v3 finding);
+literal n/a is legal for problem-report scenarios.
+
+v2.16.1 POSIX self-test fix (external Linux review, corr-106): CLI_VAULT_PIN
+Windows drive-letter fixture gated on os.name=="nt" with a POSIX literal
+alternative — on POSIX backslash is not a path separator, so the Windows
+fixture made --self-test rc=1 on Linux/macOS, formally blocking the trust
+prerequisite (self-test before trusting a scan). First external Windows user
+missed it; first external Linux user caught it.
 
 v2.16.0 sub-vault federation fixes (first external cold-start, issue Guo337/sgc#1,
 corr-105): GOV_SINGLETON presence requirement exempts declared sub-vaults (ROOT
@@ -101,7 +122,7 @@ try:
 except Exception:
     pass
 
-VERSION = "2.16.0"
+VERSION = "2.17.0"
 STALE_DAYS = 180
 SUMMARY_SOFT_CHARS = 120          # rough character proxy for the "summary <= 50 tokens" rule
 
@@ -162,6 +183,29 @@ OV_ID_RE = re.compile(r"^ov-\d{4}-[a-z0-9-]+$")   # ov-{yyyy}-{slug}（如 ov-20
 OV_FORBIDDEN_FIELDS = ("layer", "k", "v", "e", "edge-policy", "project",
                        "domain", "maturity", "hub", "spec-kind",
                        "trigger", "session-task", "touched", "target")
+# project hosting family (项目托管族): project-spec (project workflow specs, content
+# authority = project Owner) + project-analysis (issue analysis, target backpointer
+# to an L1 report). Fifth node category (corr-2026-11-24-110). NOT knowledge entries:
+# exempt from knowledge required fields / layer / type-layer checks; validated by
+# PROJ_* alternative criteria (G principle, volume/governance/overview precedent).
+# Zero authority over TTL runtime (01-AUTHORITY §2); federation:never.
+# Authority: schema.yaml project section.
+PROJ_TYPES = {"project-spec", "project-analysis"}
+PROJ_REQUIRED = ["id", "type", "project", "created", "last-touched", "summary"]
+PROJ_ID_RE = re.compile(r"^proj-\d{4}-[a-z][a-z0-9-]*$")   # proj-{yyyy}-{slug}
+# Knowledge-card fields a project node must NOT carry (closed-world whitelist).
+# project/summary ARE required here; target IS required for project-analysis;
+# aliases IS legal (name-resolution layer, governance precedent).
+PROJ_FORBIDDEN_FIELDS = ("layer", "k", "v", "e", "edge-policy", "domain",
+                         "maturity", "hub", "spec-kind", "trigger",
+                         "session-task", "touched", "corrections")
+# Federation fields banned on project nodes: project content is never copied
+# downstream nor promoted upstream (federation:never, structural not declarative).
+PROJ_FEDERATION_FIELDS = ("provenance", "source", "id-namespace")
+# L1 report required fields (schema L1_report; REPORT_FM closes the declared-but-
+# unenforced E-gap). Literal "n/a" is legal: problem reports may have no contrib
+# branch / session task / doctor run.
+REPORT_REQUIRED = ["branch", "session-log", "doctor-result"]
 # hub abstraction axis (v2.9.0, DP-5 方案A): strong semantic rels counted for
 # in-degree; derives_from is "source" not "instance implementation", excluded.
 HUB_STRONG_RELS = {"implements", "grounds", "specializes"}
@@ -416,7 +460,10 @@ def load_vault(root):
 def compute_reachable(files, texts, start="00-ROOT"):
     """BFS from start (default 00-ROOT): follow wikilink / .md links / directory links
     (prefix expansion). v2.8.0: start parameter lets GOV_ENTRY reuse the same BFS
-    from the governance nav anchor (05-Governance/00-INDEX) during batches 1-3."""
+    from the governance nav anchor (05-Governance/00-INDEX) during batches 1-3.
+    v2.17.0: start may also be an exact rel path — basename-keyed BFS collides when
+    two zones share an entry basename (05-Governance/00-INDEX vs 06-Project/00-INDEX);
+    an exact-path start seeds that specific file's adjacency under its own key."""
     known = {as_name(rel): rel for rel in files}
     adj = {}
     for rel, txt in texts.items():
@@ -431,11 +478,35 @@ def compute_reachable(files, texts, start="00-ROOT"):
                 targets.add(as_name(m))
             elif m.endswith("/"):
                 dirs.append(m.lstrip("./"))
-        adj[name] = (targets, dirs)
+        if name in adj:
+            # basename collision (e.g. two zones' 00-INDEX): UNION adjacency —
+            # Obsidian basename resolution is ambiguous too; reachability must
+            # not silently drop one file's links (last-wins regression, v2.17.0).
+            pt, pd = adj[name]
+            adj[name] = (pt | targets, pd + dirs)
+        else:
+            adj[name] = (targets, dirs)
 
-    reachable, q = set(), ([start] if start in known else [])
-    if start in known:
-        reachable.add(start)
+    start_key = start
+    if start not in known and start in files:
+        # exact-path anchor: seed THIS file's own adjacency under the path key,
+        # so a same-basename node in another zone cannot shadow the seed.
+        start_key = start
+        known[start] = start
+        t = strip_code(texts.get(start, ""))
+        targets, dirs = set(), []
+        for wl in WIKILINK_RE.findall(t):
+            targets.add(wl.strip().split("/")[-1])
+        for m in MDLINK_ANY_RE.findall(t):
+            m = m.strip()
+            if m.endswith(".md"):
+                targets.add(as_name(m))
+            elif m.endswith("/"):
+                dirs.append(m.lstrip("./"))
+        adj[start] = (targets, dirs)
+    reachable, q = set(), ([start_key] if start_key in known else [])
+    if start_key in known:
+        reachable.add(start_key)
     while q:
         cur = q.pop()
         tg, dirs = adj.get(cur, (set(), []))
@@ -471,6 +542,7 @@ class VaultModel:
         self.volumes = set()   # rel paths of script-volume nodes (heterogeneous, non-knowledge)
         self.governance = set()  # rel paths of governance-family nodes (constraint/reference/status)
         self.overview = set()  # rel paths of overview nodes (human-only README map, v2.13.0)
+        self.project = set()   # rel paths of project-family nodes (project-spec/project-analysis, v2.17.0)
         self.vol_by_name = {}  # volume note name -> rel (for #VERSION link resolution)
         self.vol_name_dups = {}  # note name -> [rels] when >1 volume shares a basename (S5)
         self.vol_versions = {} # rel -> VERSION constant read from the code block (truth source)
@@ -496,6 +568,8 @@ class VaultModel:
                     self.governance.add(rel)
                 if fm.get("type") in OV_TYPES:
                     self.overview.add(rel)
+                if fm.get("type") in PROJ_TYPES:
+                    self.project.add(rel)
                 if fm.get("type") == "script-volume":
                     self.volumes.add(rel)
                     nm = as_name(rel)
@@ -542,13 +616,22 @@ class VaultModel:
                     if a:
                         self.aliases.setdefault(a, []).append(rel)
         self.reachable, self.known = compute_reachable(files, self.graph_texts)
-        # v2.8.0 GOV_ENTRY transitional anchor: BFS from the governance nav page
-        # (05-Governance/00-INDEX). Batch 4 (00-ENTRY internalized) switches the
-        # anchor to the entry chain and upgrades GOV_ENTRY to ERROR.
+        # v2.8.0 GOV_ENTRY anchor: BFS from the governance nav page
+        # (05-Governance/00-INDEX). v2.17.0: exact-path start — basename "00-INDEX"
+        # now collides with 06-Project/00-INDEX in the name-keyed BFS (live
+        # regression caught by the first full-vault scan with both zones present).
         gov_nav = next((rel for rel in files
                         if rel.startswith("05-Governance/") and as_name(rel) == "00-INDEX"), None)
-        self.gov_reachable = (compute_reachable(files, self.graph_texts, start=as_name(gov_nav))[0]
+        self.gov_reachable = (compute_reachable(files, self.graph_texts, start=gov_nav)[0]
                               if gov_nav else set())
+        # v2.17.0 PROJ_ENTRY anchor: BFS from the project-zone entry page,
+        # GOV_ENTRY final-form pattern (corr-2026-11-24-110). Anchor by EXACT path:
+        # as_name("00-INDEX") collides with the governance nav page (same basename),
+        # and compute_reachable's name-keyed BFS would seed from whichever wins the
+        # known-map — a live regression caught by the first full-vault scan.
+        proj_nav = "06-Project/00-INDEX.md" if "06-Project/00-INDEX.md" in files else None
+        self.proj_reachable = (compute_reachable(files, self.graph_texts, start=proj_nav)[0]
+                               if proj_nav else set())
         # v2.7.0 category partition (RC4): computed once, consumed by the engine's
         # applicability dispatch. knowledge = fm-bearing non-volume; volume = volumes.
         # v2.8.0: governance is a third category, mutually exclusive with knowledge
@@ -556,7 +639,7 @@ class VaultModel:
         # v2.13.0: overview is a fourth category, mutually exclusive too.
         self.knowledge = {rel for rel in files
                           if rel not in self.volumes and rel not in self.governance
-                          and rel not in self.overview
+                          and rel not in self.overview and rel not in self.project
                           and self.parsed[rel][0] is not None}
         # v2.9.0 hub axis: structured e-edge adjacency (target name -> [(rel, source rel)])
         # and abstracts edges for inverse reconciliation. e items are flow-map strings
@@ -658,12 +741,13 @@ def rule_id_namespace(model, report):
         _id = fm.get("id")
         if rel != "00-ROOT.md" and isinstance(_id, str) and _id:
             kind = _id.split("-", 1)[0]
-            if kind in ("gov", "vol", "ov"):
-                # governance family / script volumes / overview carry independent id
-                # prefixes (not knowledge {kind}-{slug}); federation boundary: a
-                # sub-vault doctor seeing them judges "not this vault's ontology",
-                # not an id-namespace violation (corr-2026-11-16-57; ov-* added
-                # corr-2026-11-20-89).
+            if kind in ("gov", "vol", "ov", "proj"):
+                # governance family / script volumes / overview / project family carry
+                # independent id prefixes (not knowledge {kind}-{slug}); federation
+                # boundary: a sub-vault doctor seeing them judges "not this vault's
+                # ontology", not an id-namespace violation (corr-2026-11-16-57; ov-*
+                # added corr-2026-11-20-89; proj-* added corr-2026-11-24-110 — each
+                # vault's project zone belongs to that vault's own projects).
                 continue
             local_prefix = "%s-%s-" % (kind, model.id_ns)
             if not _id.startswith(local_prefix) and fm.get("provenance") != "copied":
@@ -1021,7 +1105,10 @@ def rule_broken_link(model, report):
 def rule_unreachable(model, report):
     # overview 显式豁免（v2.13.0）：纯人读故意不挂 ROOT 路由，不豁免则恒报 WARN
     # 自绊 0E/0W/0I 验收（schema overview 节，corr-2026-11-20-89）。
-    exempt_types = {"log", "report", "correction", "pitfall", "overview"}
+    # project 族豁免（v2.17.0）：入口契约的执行者是 PROJ_ENTRY（06-Project/00-INDEX
+    # 锚），ROOT 路由非其义务（schema project 节，corr-2026-11-24-110）。
+    exempt_types = {"log", "report", "correction", "pitfall", "overview",
+                    "project-spec", "project-analysis"}
     for rel in sorted(model.files):
         name = as_name(rel)
         fm = model.parsed[rel][0]
@@ -1305,7 +1392,7 @@ def _schema_tables(text):
     lines = text.splitlines()
     tables = {"common_required": [], "type_enum": [], "layer_enum": [],
               "vol_required": [], "gov_required": [], "ov_required": [],
-              "type_by_layer": {}}
+              "proj_required": [], "type_by_layer": {}}
     section = None
     for ln in lines:
         if re.match(r"^common:\s*", ln):
@@ -1316,6 +1403,8 @@ def _schema_tables(text):
             section = "gov"; continue
         if re.match(r"^overview:\s*", ln):
             section = "ov"; continue
+        if re.match(r"^project:\s*", ln):
+            section = "proj"; continue
         if re.match(r"^[A-Za-z_]", ln) and not ln.startswith(" "):
             section = None
         if section == "common":
@@ -1359,6 +1448,15 @@ def _schema_tables(text):
             m = re.match(r"^    ([A-Za-z0-9_\-]+):\s*", ln)
             if m:
                 tables["ov_required"].append(m.group(1))
+            elif re.match(r"^  [a-z]", ln):
+                section = None
+        if section == "proj":
+            if re.match(r"^  required:", ln):
+                section = "projreq"; continue
+        if section == "projreq":
+            m = re.match(r"^    ([A-Za-z0-9_\-]+):\s*", ln)
+            if m:
+                tables["proj_required"].append(m.group(1))
             elif re.match(r"^  [a-z]", ln):
                 section = None
     return tables
@@ -1405,6 +1503,11 @@ def rule_contract_drift(model, report):
                "CONTRACT 漂移: overview.required schema=%s doctor=%s"
                % (sorted(tables["ov_required"]), sorted(OV_REQUIRED)),
                "同步 doctor OV_REQUIRED 与 schema overview.required")
+    if tables["proj_required"] and set(tables["proj_required"]) != set(PROJ_REQUIRED):
+        report(SCHEMA_REL, "ERROR", "CONTRACT_DRIFT",
+               "CONTRACT 漂移: project.required schema=%s doctor=%s"
+               % (sorted(tables["proj_required"]), sorted(PROJ_REQUIRED)),
+               "同步 doctor PROJ_REQUIRED 与 schema project.required")
     if tables["type_by_layer"]:
         for layer, types in tables["type_by_layer"].items():
             impl = TYPE_BY_LAYER.get(layer, set())
@@ -1554,6 +1657,184 @@ def rule_ov_knowledge_field(model, report):
             report(rel, "ERROR", "OV_KNOWLEDGE_FIELD",
                    "overview 携带知识字段: %s" % ", ".join(bad),
                    "overview 是非知识节点（封闭世界白名单）：移除知识字段，字段见 schema overview（summary/aliases 合法）")
+
+
+# ---------------------------------------------------------------- project rules
+# Alternative criteria for the project hosting family (G principle, volume/
+# governance/overview precedent, corr-2026-11-24-110). Project nodes carry content
+# whose authority is the project Owner; doctor validates structure only, never
+# content. Broken links stay under BROKEN_LINK (all-rule); UNREACHABLE exempts the
+# family (PROJ_ENTRY is the entry contract's executor).
+
+def rule_proj_fm(model, report):
+    for rel in sorted(model.project):
+        fm = model.parsed[rel][0]
+        if fm is None:
+            continue   # FM_MISSING already covers unparseable frontmatter
+        for k in PROJ_REQUIRED:
+            if k not in fm or _empty_required(fm[k]):
+                report(rel, "ERROR", "PROJ_FM", "项目节点缺必填字段: %s" % k,
+                       "按 schema.yaml project.required 补字段 %s" % k)
+        typ = fm.get("type")
+        # conditional required fields by type (schema project.conditional)
+        cond = {"project-spec": ("owner", "status"),
+                "project-analysis": ("target",)}.get(typ, ())
+        for k in cond:
+            if k not in fm or _empty_required(fm[k]):
+                report(rel, "ERROR", "PROJ_FM",
+                       "项目节点 type=%s 缺条件必填字段: %s" % (typ, k),
+                       "按 schema.yaml project.conditional 补字段 %s" % k)
+        _id = fm.get("id")
+        if isinstance(_id, str) and _id and not PROJ_ID_RE.match(_id):
+            report(rel, "ERROR", "PROJ_FM",
+                   "项目节点 id 形态非法: %s（应为 proj-{yyyy}-{slug}）" % _id,
+                   "id 用 proj-{yyyy}-{slug} 形态（见 schema project）")
+        if typ == "project-spec":
+            st = fm.get("status")
+            if st is not None and not _empty_required(st):
+                if str(st) not in ("ACTIVE", "SUPERSEDED"):
+                    report(rel, "ERROR", "PROJ_FM", "status 非法: %r" % st,
+                           "project-spec status 取 ACTIVE/SUPERSEDED（schema project.conditional）")
+                elif str(st) == "SUPERSEDED":
+                    sup = fm.get("supersedes")
+                    if not isinstance(sup, str) or not sup.strip():
+                        report(rel, "ERROR", "PROJ_FM", "SUPERSEDED 缺 supersedes 指针",
+                               "补 supersedes: 取代者指针（[[新规格]] 或 proj id）")
+                    else:
+                        m = re.search(r"\[\[([^\]\|#]+)", sup)
+                        tgt = m.group(1).strip() if m else sup.strip()
+                        name = tgt.split("/")[-1]
+                        if name not in model.resolvable and tgt not in model.ids:
+                            report(rel, "ERROR", "PROJ_FM",
+                                   "supersedes 指针目标不存在: %s" % sup,
+                                   "确认取代者节点已建（wikilink 或 proj id 可解析）")
+        if typ == "project-analysis":
+            tgt = fm.get("target")
+            if isinstance(tgt, str) and tgt.strip():
+                m = re.search(r"\[\[([^\]\|#]+)", tgt)
+                name = (m.group(1).strip() if m else tgt.strip()).split("/")[-1]
+                if name not in model.resolvable:
+                    report(rel, "ERROR", "PROJ_FM",
+                           "target 申报件不存在: %s" % tgt,
+                           "target 指向 04-Logs/ 的申报件（type:report wikilink），确认已建")
+
+
+def rule_proj_knowledge_field(model, report):
+    for rel in sorted(model.project):
+        fm = model.parsed[rel][0]
+        if not isinstance(fm, dict):
+            continue
+        bad = [k for k in PROJ_FORBIDDEN_FIELDS if k in fm]
+        if bad:
+            report(rel, "ERROR", "PROJ_KNOWLEDGE_FIELD",
+                   "项目节点携带知识字段: %s" % ", ".join(bad),
+                   "项目族是非知识节点（封闭世界白名单）：移除知识字段，字段见 schema project（project/summary/target/aliases 合法）")
+        fed = [k for k in PROJ_FEDERATION_FIELDS if k in fm]
+        if fed:
+            report(rel, "ERROR", "PROJ_KNOWLEDGE_FIELD",
+                   "项目节点携带联邦字段: %s" % ", ".join(fed),
+                   "项目私货不复制不上提（federation:never）：移除 provenance/source/id-namespace")
+
+
+def rule_proj_placement(model, report):
+    """PROJ_PLACEMENT: type<->path binding, both directions. project-spec lives in
+    06-Project/specs/, project-analysis in 06-Project/issues/; the zone entry
+    (06-Project/00-INDEX, type:project-spec navigation exception) is exempt from
+    the specs/ requirement. Reverse: runtime type:spec must not land in the project
+    zone, project types must not land in 01-Specs/."""
+    for rel in sorted(model.files):
+        fm = model.parsed[rel][0]
+        if not isinstance(fm, dict):
+            continue
+        typ = fm.get("type")
+        r = rel.replace("\\", "/")
+        if typ == "project-spec":
+            if r == "06-Project/00-INDEX.md":
+                continue   # zone entry navigation exception (schema project.entry)
+            if not r.startswith("06-Project/specs/"):
+                report(rel, "ERROR", "PROJ_PLACEMENT",
+                       "project-spec 落点非法（须在 06-Project/specs/）",
+                       "移至 06-Project/specs/（入口 00-INDEX 例外；type↔路径双向绑定）")
+        elif typ == "project-analysis":
+            if not r.startswith("06-Project/issues/"):
+                report(rel, "ERROR", "PROJ_PLACEMENT",
+                       "project-analysis 落点非法（须在 06-Project/issues/）",
+                       "移至 06-Project/issues/（申报件本体是 L1 report，落 04-Logs/）")
+        elif typ == "spec" and r.startswith("06-Project/"):
+            report(rel, "ERROR", "PROJ_PLACEMENT",
+                   "runtime type:spec 禁落项目托管区",
+                   "项目流程规格用 type:project-spec；runtime 规格落 01-Specs/")
+        if typ in PROJ_TYPES and r.startswith("01-Specs/"):
+            report(rel, "ERROR", "PROJ_PLACEMENT",
+                   "project 族禁落 01-Specs/（runtime 规格区）",
+                   "项目件落 06-Project/；01-Specs/ 只装 TTL runtime 规格")
+
+
+def rule_proj_entry(model, report):
+    """PROJ_ENTRY: ERROR. Anchor = 06-Project/00-INDEX entry page (the entry itself
+    is exempt). GOV_ENTRY final-form pattern: the project family must be
+    discoverable through its own entry, not by accident."""
+    for rel in sorted(model.project):
+        if rel.replace("\\", "/") == "06-Project/00-INDEX.md":
+            continue
+        if as_name(rel) not in model.proj_reachable:
+            report(rel, "ERROR", "PROJ_ENTRY",
+                   "项目节点经入口不可达（锚=06-Project/00-INDEX）",
+                   "在 06-Project/00-INDEX 入口页建立指向本节点的链接（项目族须经自身入口可发现）")
+
+
+def rule_proj_edge_ban(model, report):
+    """PROJ_EDGE_BAN: knowledge-card k/v/e edges must not target project-family
+    nodes — the knowledge graph must not treat project content as a knowledge
+    dependency (federation:never at the graph level). Body wikilink pointers stay
+    legal (they are prose references, not semantic edges)."""
+    proj_names = {as_name(rel) for rel in model.project}
+    if not proj_names:
+        return
+    for rel in sorted(model.knowledge):
+        fm = model.parsed[rel][0]
+        if not isinstance(fm, dict):
+            continue
+        for key in ("k", "v"):
+            val = fm.get(key)
+            items = val if isinstance(val, list) else ([val] if val else [])
+            for item in items:
+                if not isinstance(item, str):
+                    continue
+                for m in re.finditer(r"\[\[([^\]\|#]+)", item):
+                    name = m.group(1).strip().split("/")[-1]
+                    if name in proj_names:
+                        report(rel, "ERROR", "PROJ_EDGE_BAN",
+                               "知识卡 %s 边指向项目节点 [[%s]]" % (key, name),
+                               "项目内容不是知识依赖（federation:never）：移除该边，正文指针合法")
+        ev = fm.get("e")
+        if isinstance(ev, list):
+            for item in ev:
+                if not isinstance(item, str):
+                    continue
+                mt = re.search(r"target:\s*\"?\[\[([^\]\|#]+)", item)
+                if mt:
+                    name = mt.group(1).strip().split("/")[-1]
+                    if name in proj_names:
+                        report(rel, "ERROR", "PROJ_EDGE_BAN",
+                               "知识卡 e 边指向项目节点 [[%s]]" % name,
+                               "项目内容不是知识依赖（federation:never）：移除该边，正文指针合法")
+
+
+def rule_report_fm(model, report):
+    """REPORT_FM (v2.17.0): enforce schema L1_report's declared required fields —
+    branch/session-log/doctor-result. The schema declared them required since
+    L1_report existed but doctor never enforced (E-gap, independent review v3
+    finding, corr-2026-11-24-110). Literal n/a is legal: problem reports may have
+    no contrib branch / session task / doctor run."""
+    for rel in sorted(model.files):
+        fm = model.parsed[rel][0]
+        if not isinstance(fm, dict) or fm.get("type") != "report":
+            continue
+        for k in REPORT_REQUIRED:
+            if k not in fm or _empty_required(fm[k]):
+                report(rel, "ERROR", "REPORT_FM", "申报报告缺必填字段: %s" % k,
+                       "按 schema.yaml L1_report 补字段 %s（问题申报场景无对应物时填字面 n/a）" % k)
 
 
 # ---------------------------------------------------------------- governance rules
@@ -1809,6 +2090,12 @@ RULES = [
     Rule("GOV_SINGLETON", "graph", rule_gov_singleton, since="2.8.0", applies=("governance",)),
     Rule("OV_FM", "file", rule_ov_fm, since="2.13.0", applies=("overview",)),
     Rule("OV_KNOWLEDGE_FIELD", "file", rule_ov_knowledge_field, since="2.13.0", applies=("overview",)),
+    Rule("PROJ_FM", "file", rule_proj_fm, since="2.17.0", applies=("project",)),
+    Rule("PROJ_KNOWLEDGE_FIELD", "file", rule_proj_knowledge_field, since="2.17.0", applies=("project",)),
+    Rule("PROJ_PLACEMENT", "file", rule_proj_placement, since="2.17.0"),
+    Rule("PROJ_ENTRY", "graph", rule_proj_entry, since="2.17.0", applies=("project",)),
+    Rule("PROJ_EDGE_BAN", "graph", rule_proj_edge_ban, since="2.17.0", applies=("knowledge",)),
+    Rule("REPORT_FM", "file", rule_report_fm, since="2.17.0", applies=("knowledge",)),
     Rule("STATUS_CLAIM", "cross", rule_status_claim, since="2.10.0", applies=("governance",)),
     Rule("STATUS_SIZE", "file", rule_status_size, level="WARN", since="2.10.0", applies=("governance",)),
     Rule("HUB_GROUNDS", "graph", rule_hub_grounds, level="WARN", since="2.9.0", applies=("knowledge",)),
@@ -1850,6 +2137,8 @@ def analyze(files, extra_resolvable=None, vault_root=None):
                 allowed |= model.governance
             if "overview" in rule.applies:
                 allowed |= model.overview
+            if "project" in rule.applies:
+                allowed |= model.project
             sub = VaultModel.__new__(VaultModel)
             sub.__dict__.update(model.__dict__)
             sub.files = {rel: txt for rel, txt in model.files.items() if rel in allowed}
@@ -2061,6 +2350,33 @@ def _ov_fix(slug, **kw):
     base = {"id": "ov-2026-" + slug, "type": "overview",
             "created": "2026-11-20", "last-touched": "2026-11-20",
             "summary": "全景地图"}
+    base.update(kw)
+    fm = "\n".join("%s: %s" % (k, v) for k, v in base.items())
+    return "---\n%s\n---\n# %s\n" % (fm, slug)
+
+
+def _proj_fix(slug, typ="project-spec", **kw):
+    """Build a well-formed project-family fixture (flat frontmatter, no knowledge fields)."""
+    base = {"id": "proj-2026-" + slug, "type": typ, "project": "demo-proj",
+            "created": "2026-11-24", "last-touched": "2026-11-24",
+            "summary": "项目件"}
+    if typ == "project-spec":
+        base.update({"owner": "demo-owner", "status": "ACTIVE"})
+    if typ == "project-analysis":
+        base.update({"target": '"[[rep-good]]"'})
+    base.update(kw)
+    fm = "\n".join("%s: %s" % (k, v) for k, v in base.items())
+    return "---\n%s\n---\n# %s\n" % (fm, slug)
+
+
+def _report_fix(slug, **kw):
+    """Build a well-formed L1 report fixture (REPORT_FM fields present)."""
+    base = {"id": "rep-2026-11-24-" + slug, "layer": 1, "type": "report",
+            "project": "demo-proj", "domain": "[test]", "maturity": "evergreen",
+            "branch": "contrib/demo-2026-11-24", "session-log": "n/a",
+            "doctor-result": "0E/0W/0I",
+            "created": "2026-11-24", "last-touched": "2026-11-24",
+            "summary": "申报"}
     base.update(kw)
     fm = "\n".join("%s: %s" % (k, v) for k, v in base.items())
     return "---\n%s\n---\n# %s\n" % (fm, slug)
@@ -2343,7 +2659,7 @@ def self_test():
         "common:\n"
         "  id:          string\n"
         "  layer:       enum [1, 2, 3]\n"
-        "  type:        enum [concept, claim, procedure, observation, entity, summary, pitfall, spec, log, report, correction, feedback, script-volume, constraint, reference, status, overview]   # L1→log/report/correction；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback\n"
+        "  type:        enum [concept, claim, procedure, observation, entity, summary, pitfall, spec, log, report, correction, feedback, script-volume, constraint, reference, status, overview, project-spec, project-analysis]   # L1→log/report/correction；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback\n"
         "  project:     string\n"
         "  domain:      list[string]\n"
         "  maturity:    enum [seed, growing, evergreen, archived]\n"
@@ -2379,7 +2695,18 @@ def self_test():
         "    last-touched:  date\n"
         "    summary:       string\n"
         "  optional:\n"
-        "    aliases:       list[string]\n")
+        "    aliases:       list[string]\n"
+        "project:\n"
+        "  required:\n"
+        "    id:            string\n"
+        "    type:          enum [project-spec, project-analysis]\n"
+        "    project:       string\n"
+        "    created:       date\n"
+        "    last-touched:  date\n"
+        "    summary:       string\n"
+        "  conditional:\n"
+        "    project-spec:     { owner: string, status: enum [ACTIVE, SUPERSEDED] }\n"
+        "    project-analysis: { target: link }\n")
     # hub fixtures (v2.9.0, corr-2026-11-16-58): clean hub with 2 implements in-edges
     # + abstracts decompression passes; hub without enough in-edges / without abstracts /
     # abstracts without inverse each fire WARN; secondary-type illegal/same/no-plan fire.
@@ -2624,6 +2951,122 @@ def self_test():
     ov_ns_issues, _, _ = analyze(ov_ns_files)
     ov_ok = ov_ok and not any(it["rule"] == "ID_NAMESPACE" for it in ov_ns_issues)
 
+    # project fixtures (v2.17.0, corr-2026-11-24-110): clean spec/analysis/entry
+    # pass ALL rules (knowledge exemption two-way + UNREACHABLE family exemption);
+    # each PROJ_* rule needs a destructive counterpart; REPORT_FM closes the
+    # declared-but-unenforced L1_report gap (n/a legal); ID_NAMESPACE exempts proj-*.
+    proj_files = {
+        "00-ROOT.md": ("---\nid: \"spec-root-000\"\nlayer: 3\ntype: spec\nspec-kind: read\n"
+                       "project: memory-lib\ndomain: [test]\nmaturity: growing\ncreated: 2026-11-24\n"
+                       "last-touched: 2026-11-24\nsummary: root\n---\n# ROOT\n"
+                       "- [p](06-Project/00-INDEX.md)\n- [ur](06-Project/specs/proj-unreach.md)\n"),
+        "06-Project/00-INDEX.md": _proj_fix("index", owner="maintainer") + (
+            "- [[proj-good]]\n- [[proj-badfm]]\n- [[proj-badid]]\n- [[proj-badcond]]\n"
+            "- [[proj-badstatus]]\n- [[proj-nosup]]\n- [[proj-knowfield]]\n- [[proj-fedfield]]\n"
+            "- [[proj-misplace]]\n- [[proj-good-analysis]]\n- [[proj-badtarget]]\n"
+            "- [[proj-notarget]]\n- [[proj-edge-src]]\n"),
+        "06-Project/specs/proj-good.md": _proj_fix("good"),
+        # PROJ_FM: missing required (summary) + illegal id form + spec missing owner
+        "06-Project/specs/proj-badfm.md": _proj_fix("badfm").replace("summary: 项目件\n", "", 1),
+        "06-Project/specs/proj-badid.md": _proj_fix("badid", id="proj-terms"),
+        "06-Project/specs/proj-badcond.md": _proj_fix("badcond").replace("owner: demo-owner\n", "", 1),
+        # PROJ_FM: illegal status + SUPERSEDED without pointer
+        "06-Project/specs/proj-badstatus.md": _proj_fix("badstatus", status="RETIRED"),
+        "06-Project/specs/proj-nosup.md": _proj_fix("nosup", status="SUPERSEDED"),
+        # PROJ_KNOWLEDGE_FIELD: knowledge fields + federation fields
+        "06-Project/specs/proj-knowfield.md": _proj_fix("knowfield", layer=2, maturity="seed"),
+        "06-Project/specs/proj-fedfield.md": _proj_fix("fedfield", provenance="copied"),
+        # PROJ_PLACEMENT: project-spec outside specs/
+        "06-Project/proj-misplace.md": _proj_fix("misplace"),
+        # PROJ_ENTRY: reachable from ROOT but NOT via the 00-INDEX anchor -> ERROR
+        "06-Project/specs/proj-unreach.md": _proj_fix("unreach"),
+        # runtime type:spec banned in the project zone (reverse placement);
+        # frontmatter is otherwise legal so ONLY PROJ_PLACEMENT fires here
+        "06-Project/specs/proj-runtimespec.md": (
+            "---\nid: spec-2026-rtspec\nlayer: 3\ntype: spec\nspec-kind: read\n"
+            "project: memory-lib\ndomain: [test]\nmaturity: growing\n"
+            "created: 2026-11-24\nlast-touched: 2026-11-24\nsummary: rtspec\n"
+            "---\n# rtspec\n"),
+        # project-analysis: clean (target exists) + dangling target + missing target
+        "04-Logs/rep-good.md": _report_fix("01"),
+        "06-Project/issues/proj-good-analysis.md": _proj_fix("good-analysis", typ="project-analysis"),
+        "06-Project/issues/proj-badtarget.md": _proj_fix("badtarget", typ="project-analysis",
+                                                         target='"[[rep-ghost-xyz]]"'),
+        "06-Project/issues/proj-notarget.md": _proj_fix("notarget", typ="project-analysis").replace(
+            'target: "[[rep-good]]"\n', "", 1),
+        # PROJ_EDGE_BAN: knowledge card e-edge targets a project node
+        "02-Cards/proj-edge-src.md": (
+            "---\nid: c-edge\nlayer: 2\ntype: concept\nproject: memory-lib\ndomain: [test]\n"
+            "maturity: seed\ncreated: 2026-11-24\nlast-touched: 2026-11-24\nsummary: edge\n"
+            "e:\n  - { target: \"[[proj-good]]\", rel: depends_on, weight: 0.5 }\n"
+            "---\n# edge-src\n"),
+        # REPORT_FM: report missing doctor-result; n/a variant passes
+        "04-Logs/rep-badfm.md": _report_fix("02").replace("doctor-result: 0E/0W/0I\n", "", 1),
+        "04-Logs/rep-na.md": _report_fix("03", branch="n/a", **{"doctor-result": "n/a"}),
+    }
+    proj_issues, _, _ = analyze(proj_files)
+    proj_clean = [it for it in proj_issues
+                  if it["file"] in ("06-Project/specs/proj-good.md",
+                                    "06-Project/issues/proj-good-analysis.md",
+                                    "06-Project/00-INDEX.md",
+                                    "04-Logs/rep-good.md", "04-Logs/rep-na.md")]
+    proj_expect = {"06-Project/specs/proj-badfm.md": "PROJ_FM",
+                   "06-Project/specs/proj-badid.md": "PROJ_FM",
+                   "06-Project/specs/proj-badcond.md": "PROJ_FM",
+                   "06-Project/specs/proj-badstatus.md": "PROJ_FM",
+                   "06-Project/specs/proj-nosup.md": "PROJ_FM",
+                   "06-Project/specs/proj-knowfield.md": "PROJ_KNOWLEDGE_FIELD",
+                   "06-Project/specs/proj-fedfield.md": "PROJ_KNOWLEDGE_FIELD",
+                   "06-Project/proj-misplace.md": "PROJ_PLACEMENT",
+                   "06-Project/specs/proj-runtimespec.md": "PROJ_PLACEMENT",
+                   "06-Project/issues/proj-badtarget.md": "PROJ_FM",
+                   "06-Project/issues/proj-notarget.md": "PROJ_FM",
+                   "02-Cards/proj-edge-src.md": "PROJ_EDGE_BAN",
+                   "04-Logs/rep-badfm.md": "REPORT_FM"}
+    proj_ok = not proj_clean
+    for f, r in proj_expect.items():
+        proj_ok = proj_ok and any(it["file"] == f and it["rule"] == r for it in proj_issues)
+    # PROJ_ENTRY: entry-unreachable fires ERROR; clean nodes reachable via entry pass
+    proj_entry_hits = [it for it in proj_issues if it["rule"] == "PROJ_ENTRY"]
+    proj_ok = proj_ok and len(proj_entry_hits) == 1 \
+        and proj_entry_hits[0]["file"] == "06-Project/specs/proj-unreach.md" \
+        and proj_entry_hits[0]["level"] == "ERROR"
+    # UNREACHABLE family exemption: clean project nodes off ROOT routing stay silent
+    # (the misplaced runtime-spec fixture is knowledge-category, its WARN is expected)
+    proj_ok = proj_ok and not any(it["rule"] == "UNREACHABLE"
+                                  and it["file"].startswith("06-Project/")
+                                  and it["file"] != "06-Project/specs/proj-runtimespec.md"
+                                  for it in proj_issues)
+    # knowledge rules must NOT fire on project nodes (central dispatch, two-way)
+    proj_ok = proj_ok and not any(it["rule"] in ("FIELD_MISSING", "LAYER_BAD", "TYPE_LAYER",
+                                                 "EDGE_ORPHAN", "STALE", "ATLAS_EMPTY", "SPEC_KIND")
+                                  for it in proj_issues if it["file"].startswith("06-Project/"))
+    # ID_NAMESPACE federation boundary: declared sub-vault, proj-* node exempt
+    proj_ns_files = {
+        "00-ROOT.md": ("---\nid: \"spec-root-000\"\nlayer: 3\ntype: spec\nspec-kind: read\n"
+                       "project: demo\ndomain: [test]\nmaturity: growing\ncreated: 2026-11-24\n"
+                       "last-touched: 2026-11-24\nsummary: root\nid-namespace: demo\n---\n# ROOT\n"
+                       "- [p](06-Project/00-INDEX.md)\n"),
+        "06-Project/00-INDEX.md": _proj_fix("index", owner="maintainer") + "- [[proj-ns]]\n",
+        "06-Project/specs/proj-ns.md": _proj_fix("ns"),
+    }
+    proj_ns_issues, _, _ = analyze(proj_ns_files)
+    proj_ok = proj_ok and not any(it["rule"] == "ID_NAMESPACE" for it in proj_ns_issues)
+    # 双 00-INDEX 共存回归（首扫实证 bug）：治理导航页与项目入口同 basename，
+    # BFS 锚不得互相遮蔽——治理节点经治理锚可达、项目节点经项目锚可达，各自零误报。
+    dual_files = dict(proj_files)
+    dual_files["05-Governance/00-INDEX.md"] = _gov_fix("gov-index") + "- [[gov-dual]]\n"
+    dual_files["05-Governance/gov-dual.md"] = _gov_fix("dual")
+    dual_files["00-ROOT.md"] = dual_files["00-ROOT.md"].replace(
+        "- [p](06-Project/00-INDEX.md)\n",
+        "- [p](06-Project/00-INDEX.md)\n- [g](05-Governance/00-INDEX.md)\n")
+    dual_issues, _, _ = analyze(dual_files)
+    proj_ok = proj_ok and not any(
+        it["rule"] in ("GOV_ENTRY", "PROJ_ENTRY")
+        and it["file"] in ("05-Governance/gov-dual.md", "06-Project/specs/proj-good.md",
+                           "06-Project/issues/proj-good-analysis.md")
+        for it in dual_issues)
+
     ct_files = {"00-ROOT.md": files["00-ROOT.md"], SCHEMA_REL: schema_good}
     ct_issues, _, _ = analyze(ct_files)
     ct_good = not any(it["rule"] == "CONTRACT_DRIFT" for it in ct_issues)
@@ -2642,7 +3085,13 @@ def self_test():
     ct_ov_bad_issues, _, _ = analyze(ct_ov_bad_files)
     ct_ov_bad = any(it["rule"] == "CONTRACT_DRIFT" and it["level"] == "ERROR"
                     and "overview.required" in it["message"] for it in ct_ov_bad_issues)
-    contract_ok = ct_good and ct_bad and ct_gov_bad and ct_ov_bad
+    ct_proj_bad_files = {"00-ROOT.md": files["00-ROOT.md"],
+                         SCHEMA_REL: schema_good.replace(
+                             "    project:       string\n", "", 1)}
+    ct_proj_bad_issues, _, _ = analyze(ct_proj_bad_files)
+    ct_proj_bad = any(it["rule"] == "CONTRACT_DRIFT" and it["level"] == "ERROR"
+                      and "project.required" in it["message"] for it in ct_proj_bad_issues)
+    contract_ok = ct_good and ct_bad and ct_gov_bad and ct_ov_bad and ct_proj_bad
 
     # TRIGGER_FM fixtures (v2.14.0, knife F1): red-before-green — missing
     # trigger / missing scope / illegal enum / empty scope each fire ERROR;
@@ -2867,6 +3316,13 @@ def self_test():
     print("  [%s] %-14s %s" % ("OK" if ov_ok else "MISS", "OV_RULES",
                                 "overview 契约正确（干净README零告警+UNREACHABLE豁免，OV_FM/KNOWLEDGE_FIELD 各触发，断链仍ERROR，知识规则不泄漏，副库 ov-* 豁免 ID_NAMESPACE）" if ov_ok else
                                 "OV_* 触发或豁免不符预期"))
+    # project: clean spec/analysis/entry pass all rules (UNREACHABLE family exempt);
+    # PROJ_* fire on their broken fixtures; REPORT_FM enforces L1_report (n/a legal);
+    # knowledge rules do not leak; proj-* exempt in a declared sub-vault.
+    ok = ok and proj_ok
+    print("  [%s] %-14s %s" % ("OK" if proj_ok else "MISS", "PROJ_RULES",
+                                "项目族契约正确（干净件零告警+UNREACHABLE豁免，PROJ_FM/KNOWLEDGE_FIELD/PLACEMENT/ENTRY/EDGE_BAN+REPORT_FM 各触发，知识规则不泄漏，副库 proj-* 豁免 ID_NAMESPACE）" if proj_ok else
+                                "PROJ_*/REPORT_FM 触发或豁免不符预期"))
     # pitfall trigger contract: missing/illegal trigger + missing/empty scope fire;
     # compliant pitfall clean (red-before-green, knife F1)
     ok = ok and tf_ok
@@ -2902,7 +3358,11 @@ def self_test():
               and _cli_probe_files({"a/b/c.md": 1, "00-ROOT.md": 1, "z.md": 1})
               == ["00-ROOT.md", "z.md", "a/b/c.md"]
               and vault_display_name(os.path.join("x", "y", "vault")) == "vault"
-              and vault_display_name("C:\\a\\b\\vault\\") == "vault"
+              # Windows drive-letter fixture only on nt: on POSIX backslash is not a
+              # separator, so os.path cannot parse it (external Linux cold-start,
+              # external Linux review P0, corr-106). Platform-appropriate literal instead.
+              and vault_display_name("C:\\a\\b\\vault\\" if os.name == "nt"
+                                     else "/a/b/vault/") == "vault"
               and vault_display_name("") == ""
               and _cli_output_unusable("Vault not found.")
               and _cli_output_unusable('Error: Command "unresolved" not found. It may require a plugin to be enabled.')
@@ -2925,7 +3385,7 @@ def self_test():
     print("  [%s] %-14s %s" % ("OK" if d10_ok else "MISS", "CLI_UTF8_DECODE",
                                 "CLI 中文 UTF-8 输出正确解码" if d10_ok else
                                 "CLI 中文输出解码失败（D10 回归）"))
-    print("\nself-test: %s（触发 %d/%d 规则 + BROKEN_SET/VOL_RULES/GOV_RULES/OV_RULES/TRIGGER_FM/ATLAS_GROUP/HUB_RULES/BOOL_SCALAR/STATUS_RULES/DOC_IMPL_DRIFT/CLI_RECONCILE/CLI_VAULT_PIN/CLI_UTF8_DECODE；fixture 计 %d ERROR / %d WARN / %d INFO）"
+    print("\nself-test: %s（触发 %d/%d 规则 + BROKEN_SET/VOL_RULES/GOV_RULES/OV_RULES/PROJ_RULES/TRIGGER_FM/ATLAS_GROUP/HUB_RULES/BOOL_SCALAR/STATUS_RULES/DOC_IMPL_DRIFT/CLI_RECONCILE/CLI_VAULT_PIN/CLI_UTF8_DECODE；fixture 计 %d ERROR / %d WARN / %d INFO）"
           % ("PASS" if ok else "FAIL", len(fired & set(expect)), len(expect),
              counts["error"], counts["warn"], counts["info"]))
     return 0 if ok else 1

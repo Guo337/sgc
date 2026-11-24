@@ -1,5 +1,10 @@
 # TTL Project Agent Entry
 
+> **接续 / 新立项 / 压缩后首个动作**：先走 `agents_vault/03-Atlas/SH-index.md`
+> 认身份 → 角色件 → 域 SH（SPEC-READ §入口 6，D34），再开始任务。
+> 本文件由宿主在会话启动时注入，上下文压缩后仍在——此指针即压缩后可达的触发端
+> （corr-99 缺陷的触发端修复③，corr-106；不是 hook，D32 否决 hook 不变）。
+
 ## 0. First: which Agent are you? (identity fork)
 
 This workspace is the **TTL primary vault (Alpha kernel)**. Two kinds of Agent

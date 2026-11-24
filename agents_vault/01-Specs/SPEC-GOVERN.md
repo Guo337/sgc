@@ -90,7 +90,7 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 
 ## doctor 闸门（merge 前必过）
 
-`entry_doctor`（真值源=脚本卷 `agents_vault/90-Meta/script-volumes/entry_doctor.md`，只读、纯标准库；**P0 doctor gate 已落地 [[entry_doctor#VERSION|v2.16.0]]**）作为并入 main 的 CI 闸门。**信任前置（v2.7.0，独立评估 S1 闭合）**：信任一次扫描结果前，须先对同一抽取件跑 `--self-test` 且 rc=0——sha256 是自证锚（能改库者能改 doctor 并重算 sha），self-test 是真破坏性探针（阉割版必 MISS），强制前置即 POST 式自检；doctor 卷任何代码改动必附 correction。外部信任根=git 历史 + Owner 裁判，不做外置签名。
+`entry_doctor`（真值源=脚本卷 `agents_vault/90-Meta/script-volumes/entry_doctor.md`，只读、纯标准库；**P0 doctor gate 已落地 [[entry_doctor#VERSION|v2.17.0]]**）作为并入 main 的 CI 闸门。**信任前置（v2.7.0，独立评估 S1 闭合）**：信任一次扫描结果前，须先对同一抽取件跑 `--self-test` 且 rc=0——sha256 是自证锚（能改库者能改 doctor 并重算 sha），self-test 是真破坏性探针（阉割版必 MISS），强制前置即 POST 式自检；doctor 卷任何代码改动必附 correction。外部信任根=git 历史 + Owner 裁判，不做外置签名。
 
 **运行方式（“做Doctor”）**：.py 无常驻文件（gitignore，用时抽取）——先从卷二进制抽取 .py（开围栏 ````python 定位、闭围栏 rindex、切片 data[s:e]、比 frontmatter sha256），再执行 `python <抽取件> --vault <库根>`（抽取件放 scripts/ 下时省略 `--vault` 可自动定位库根 = `__file__` 的 `../..`）。**抽取件运行完毕后删除（含 `__pycache__`）；`scripts/` 常驻 .py 仅限冻结实验仪器（见 [[corr-2026-11-16-56]]），runtime 抽取件不得常驻**（「用完即删」动作指令，corr-56；此前仅 gitignore 注释承载，规范文本缺位致跳步实证）。**默认离线扫工作树**——一致性优先，且 App 未运行时兜底；**App 在跑时加 `--use-cli`** 叠加官方第一方 `obsidian` CLI（D23，**可完全依赖的主通道**）做 `version`/`unresolved` **自动对账**（分类：一致/离线误报/CLI 漏判/非 wikilink 目标，真分歧升 WARN；**v2.2.0 起过滤 CLI 空结果哨兵串** `No unresolved links found.`，避免误判断链目标升假 WARN），CLI 不可用则优雅降级离线（本机实测：批次1 清净后库内无 unresolved，`obsidian unresolved` 返回空结果哨兵→v2.2.0 正确过滤、自动对账四项皆“无”、闸门 0/0/0；App 关→`TimeoutExpired` 降级，两态均 PASS）。`--self-test` 跑内置破坏性 fixture 自检（全部注册规则 + BROKEN_SET + ID_NAMESPACE + VOL_RULES + VOL_DEPS + GOV_RULES + OV_RULES + HUB_RULES + DOC_IMPL_DRIFT + PARSER_V27 + CLI_RECONCILE + CLI_VAULT_PIN + CLI_UTF8_DECODE，应全 OK）；`--json` 输出稳定机读 schema。退出码 `0`=无 ERROR / `1`=有 ERROR / `2`=工具自身失败。见 [[corr-2026-11-16-49]]。
 
@@ -129,7 +129,7 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 
 **CLI 自动对账（v2.2.0，`--use-cli`）**：App 在跑时 `reconcile_cli()` 把 `obsidian unresolved` 原始输出与离线断链集**按可比性分类对账**（离线只扫 `[[wikilink]]`，CLI 还含目录/markdown 链接/embed，故不裸集合相减）：① 一致断链；② 离线有 CLI 无（疑离线误报或 App 索引滞后）；③ CLI 有 离线无（wikilink 类，疑离线漏判）；④ 非 wikilink 目标（目录/markdown 链接，离线不覆盖，仅提示）。②③ 为真分歧升 `CLI_RECONCILE`（WARN，不阻断 merge）；④ 不计入闸门。**v2.2.0 修复（坑B）**：`obsidian unresolved` 无断链时输出字面量哨兵串 `No unresolved links found.`，此前被误当一个未解析 wikilink 目标→升假 WARN；现由 `CLI_EMPTY_RE` 过滤（`--self-test` 加空哨兵用例守护）。结果进人类报告“自动对账”段 + `--json` 的 `cli_reconcile` 块（含 `index_freshness_note` 软提示，见 P0-b）。本机实测：批次1 已把 `03-Atlas/`、`90-Meta/MAP.yaml` 两条不解析链接改 inline code，库内无 unresolved，`--use-cli` 自动对账四项皆“无”、闸门 0/0/0。
 
-> **stale 与 L1 日志**：日志是永久审计记录，只按 recency 衰减检索权重，**不判 stale**（stale 仅 L2）。
+> **stale 与 L1 日志**：日志是永久审计记录，只按 recency 衰减检索权重 *(FUTURE / GHOST / NOT IMPLEMENTED——recency 衰减检索无实现载体，corr-102/106)*，**不判 stale**（stale 仅 L2）。
 >
 > **待补（P0 余项）**：① HEAD/索引一致性（P0-b）已按用户裁决 A 落地为**规约 + doctor 软提示**（v2.2.0 `--use-cli` 标注索引可能滞后），**非硬闸门**；硬代码检测（git HEAD vs mtime 启发式）留未来选项，且不一定作闸门（见 §分支切换）。② “故意破坏分支被拦”的端到端演练待角色实例化后跑（P0-c；(b) 子 Agent 审核为**倾向方案**，评审面已在 G1/G2 实操（起草→独立审核→Owner 签），但角色实例化**未正式选定**——权威状态以 §待定决策 #1 为准，2026-11-20 澄清；原"批次5"系旧计划语汇，现行波次见实施计划 r2）。（原 P0-a “--use-cli 离线↔CLI 自动对账”已于 v2.1.0 落地、v2.2.0 修哨兵串，见上“CLI 自动对账”节。）
 
@@ -155,6 +155,6 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 
 自 schema v0.7 / Owner 2026-11-12 起，规格修订说明不再内嵌于本文件，下沉至 `04-Logs/corrections/`（type:correction，按需顺指针展开，不进自动装配）。
 
-本文件历史修订说明：[[corr-2026-09-27-20]], [[corr-2026-09-27-21]], [[corr-2026-09-27-22]], [[corr-2026-09-27-23]], [[corr-2026-09-27-24]], [[corr-2026-09-27-25]], [[corr-2026-09-28-26]], [[corr-2026-09-28-27]], [[corr-2026-09-28-28]], [[corr-2026-09-30-29]], [[corr-2026-11-12-36]], [[corr-2026-11-13-40]], [[corr-2026-11-16-49]], [[corr-2026-11-16-51]], [[corr-2026-11-16-54]], [[corr-2026-11-24-105]]。
+本文件历史修订说明：[[corr-2026-09-27-20]], [[corr-2026-09-27-21]], [[corr-2026-09-27-22]], [[corr-2026-09-27-23]], [[corr-2026-09-27-24]], [[corr-2026-09-27-25]], [[corr-2026-09-28-26]], [[corr-2026-09-28-27]], [[corr-2026-09-28-28]], [[corr-2026-09-30-29]], [[corr-2026-11-12-36]], [[corr-2026-11-13-40]], [[corr-2026-11-16-49]], [[corr-2026-11-16-51]], [[corr-2026-11-16-54]], [[corr-2026-11-24-105]], [[corr-2026-11-24-106]]（recency 衰减检索就地 GHOST 标记）。
 
 后续修订按 [[SPEC-WRITE#微词反馈流程（规格书自进化引擎，决策 D5/D12）|微词反馈流程]] 新增 correction 件并在此追加指针；Git 兜底回滚不变（D17）。

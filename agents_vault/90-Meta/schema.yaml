@@ -1,4 +1,4 @@
-# TTL 记忆总库 frontmatter Schema v0.7.5（唯一权威）
+# TTL 记忆总库 frontmatter Schema v0.7.6（唯一权威）
 # 修订须经 SPEC-WRITE 微词反馈流程；修订说明下沉至 04-Logs/corrections/（v0.7 起，规格只留当前态+指针）
 
 frontmatter_subset:    # v0.7.3：doctor 解析器只承诺此扁平子集（独立评估 S4/FP4 闭合：子集外 fail-loud，不静默近似）
@@ -39,7 +39,7 @@ operating_mode:          # 运行模式（认知姿态），D14；默认档在 R
 common:                # 所有文件必填（除 risk 可选）
   id:          string
   layer:       enum [1, 2, 3]      # 1=情景 2=语义 3=规格
-  type:        enum [concept, claim, procedure, observation, entity, summary, pitfall, spec, log, report, correction, feedback, script-volume, constraint, reference, status, overview]   # 条目种类，与 layer 正交：L1→log/report/correction；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback；script-volume=运行时骨架载体（脚本卷），非知识条目，豁免 common 知识必填/layer/type↔layer 校验，按 script_volume 节校验（corr-2026-11-16-48）；constraint/reference/status=治理族（Agent-Governance 内迁），非知识条目，豁免同上，按 governance 节校验（corr-2026-11-16-57）；overview=纯人读全景地图（README），非知识条目，豁免同上，按 overview 节校验，不进检索装配（编排器类别过滤执行，corr-2026-11-20-89）
+  type:        enum [concept, claim, procedure, observation, entity, summary, pitfall, spec, log, report, correction, feedback, script-volume, constraint, reference, status, overview, project-spec, project-analysis]   # 条目种类，与 layer 正交：L1→log/report/correction；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback；script-volume=运行时骨架载体（脚本卷），非知识条目，豁免 common 知识必填/layer/type↔layer 校验，按 script_volume 节校验（corr-2026-11-16-48）；constraint/reference/status=治理族（Agent-Governance 内迁），非知识条目，豁免同上，按 governance 节校验（corr-2026-11-16-57）；overview=纯人读全景地图（README），非知识条目，豁免同上，按 overview 节校验，不进检索装配（编排器类别过滤执行，corr-2026-11-20-89）；project-spec/project-analysis=项目托管族（06-Project/），非知识条目，豁免同上，按 project 节校验，对 TTL runtime 零权威（corr-2026-11-24-110）
   project:     string              # 多项目隔离（单vault多项目，D13）
   domain:      list[string]
   maturity:    enum [seed, growing, evergreen, archived]   # L1 日志固定 evergreen（不可篡改的永久记录）
@@ -68,9 +68,11 @@ L1:                    # layer 1 日志（type: log，maturity 固定 evergreen�
   corrections: list[string]        # 派生指针：更正声明引用被更正日志 id
 
 L1_report:             # layer 1 申报报告（type: report，maturity 固定 evergreen，一经提交不可篡改；取代传统 issue，见 SPEC-GOVERN）
-  branch:        string            # 提交所在分支 contrib/{topic}-{date}
-  session-log:   string            # 关联会话日志 id
-  doctor-result: string            # 申报时 doctor 自检结果摘要
+  branch:        string            # 提交所在分支 contrib/{topic}-{date}；问题申报场景（非分支贡献）允许 n/a
+  session-log:   string            # 关联会话日志 id；问题发现非会话任务时允许 n/a
+  doctor-result: string            # 申报时 doctor 自检结果摘要；未跑自检的问题申报允许 n/a
+  # REPORT_FM（ERROR，doctor v2.17.0 起执行，corr-2026-11-24-110）：三字段必填非空，字面 n/a 合法——
+  # 此前 schema 宣称必填但 doctor 未执行（既有 E 缺口，独立评审 v3 发现）。存量盘点：主库无 report 实体（仅模板）。
 
 L1_correction:         # layer 1 更正说明（type: correction，maturity 固定 evergreen，append-only；v0.7 新增，Owner 2026-11-12 授权）
   target:      link                # 被更正的规格/卡 wikilink（如 [[SPEC-READ]]）
@@ -165,6 +167,41 @@ overview:              # 全景概览节点（type: overview）：纯人读项�
   provenance:
     authority:     git             # Git 版本权威；理念内容修订走 corr 留痕 + 出处锚点
 
+project:               # 项目托管族（type: project-spec/project-analysis）：第五类别，内容权威在项目 Owner，本项目只校验结构不审内容（Owner 2026-11-24 裁 v3 全套，corr-2026-11-24-110）
+  # 复用卷/治理/overview 判例（G 原理）：豁免知识必填/layer/type↔layer → 立 PROJ_* 可计算替代判据；封闭世界双向豁免。
+  # 一族两 type：project-spec=项目流程规格（内容权威=项目 Owner，可就地演进）；project-analysis=问题分析/应对件（可演进带 changelog，target 回指申报件）。
+  # 申报件不入此族：复用 L1 type:report（不可篡改），落 04-Logs/（L1 户口统一，append_log 守卫零改动）。
+  # 落点 06-Project/（specs/ + issues/ 两子目录）；对 TTL runtime 零权威（NON-AUTHORITY，01-AUTHORITY §2 补条）。
+  required:            # 必填字段（PROJ_FM，ERROR）
+    id:            string          # proj-{yyyy}-{slug}；全局唯一（ID_DUP 同判）；ID_NAMESPACE 豁免 proj-* 前缀（各库项目各属各库）
+    type:          enum [project-spec, project-analysis]
+    project:       string          # 所属项目名（多项目隔离，D13 同源）
+    created:       date
+    last-touched:  date
+    summary:       string          # ≤50 token 自包含
+  conditional:         # 按 type 分派的条件必填（PROJ_FM，ERROR）
+    project-spec:     { owner: string, status: enum [ACTIVE, SUPERSEDED] }   # owner=内容权威（项目/人名）；SUPERSEDED 须 supersedes 指针且目标存在（GOV_STATUS 同款）
+    project-analysis: { target: link }   # 指向申报件（04-Logs/ 的 type:report wikilink），doctor 判目标存在
+  optional:
+    aliases:       list[string]    # 名称解析层（治理族同款）
+    supersedes:    string          # project-spec SUPERSEDED 时必填指针（[[新规格]] 或 proj id）
+  validation:          # G 原理替代判据（豁免知识字段→必须立可计算判据）
+    PROJ_FM:       ERROR           # 必填齐 + 条件必填齐 + id 形态（proj-{yyyy}-{slug}）+ status 枚举合法 + SUPERSEDED 指针存在
+    PROJ_KNOWLEDGE_FIELD: ERROR    # 封闭世界白名单：禁带知识字段（layer/k/v/e/edge-policy/domain/maturity/hub/spec-kind/trigger/session-task/touched/corrections；project/summary/target 合法）+ 禁联邦字段（provenance/source/id-namespace——项目私货不复制不上提）
+    PROJ_PLACEMENT: ERROR          # type↔路径双向绑定：project-spec 必在 06-Project/specs/、project-analysis 必在 06-Project/issues/；type:spec 禁落 06-Project/、project 族禁落 01-Specs/（入口 00-INDEX 豁免 type↔路径，见下）
+    PROJ_ENTRY:    ERROR           # 经 06-Project/00-INDEX 入口 BFS 可达（GOV_ENTRY 终态同款；入口文件自身豁免）
+    PROJ_EDGE_BAN: ERROR           # 知识卡 k/v/e 边禁指向 project 族节点（防知识图谱把项目内容当知识依赖；正文 wikilink 指针合法）
+    # 断链沿 BROKEN_LINK(ERROR, all 规则)判，不另立 PROJ_LINK（G 原理：替代判据不重复判据）。
+    # UNREACHABLE(WARN)对 project 族显式豁免（PROJ_ENTRY 是入口契约的执行者，ROOT 路由非其义务）。
+  entry:               # 入口文件（06-Project/00-INDEX.md）：type: project-spec 的导航例外——PROJ_PLACEMENT 豁免其 specs/ 落点要求，PROJ_ENTRY 豁免自身；owner=本库维护者
+  exclusion:
+    assembly:      never           # 不进检索装配；执行者=read_orchestrator 类别过滤（{overview}∪治理族∪project 族，E 原理；治理族既有缺口并入闭合）
+    crystallize:   never           # 不结晶不升迁（reflect 只扫 04-Logs/logs+02-Cards，天然不收集）
+    federation:    never           # 不进副库复制名单；副库自建自己的 06-Project/（引导卡注明不复制）；sync_public_snapshot 结构排除整区
+  provenance:
+    authority:     project-owner   # 内容权威=项目 Owner；本项目只校验结构；修订走项目区自己的约定（可就地演进+changelog），不走本库 corr 流程
+    runtime:       non-authority   # 对 TTL runtime 零权威：冲突时 runtime Specs 优先（01-AUTHORITY §2）
+
 L3:                    # layer 3 规格/⚠️点
   trigger:     enum [always, on-domain, on-file-pattern, on-project]
   scope:       string
@@ -192,12 +229,13 @@ budgets:             # 硬上限；裁剪执行者=read_orchestrator（装配时
 
 constraints:
   - L2 卡至少一条边（k/v/e 任一），无边=孤岛；**例外**：`edge-policy: exempt`（如 type: summary 的 Atlas 导航节点）豁免此约束，改判"正文 wikilink 全可解析 + auto 区块非空 + ROOT 可达"。完整性检查四分（entry_doctor 负责）：orphan 孤岛(无任何边) / broken-link 断链(链接目标不存在，`obsidian unresolved` 只报这一类) / unreachable(ROOT 路由不可达) / stale(长期未用或已被取代，仅 L2 卡适用、L1 日志不判 stale)。⚠️ `obsidian unresolved` ≠ 孤岛检测，不可混用；断链优先调 CLI、离线才降级 Python 解析(B 决策)
-  - type↔layer 合法组合（entry_doctor 校验）：L1→log/report/correction（均 append-only 不可篡改）；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback；script-volume/constraint/reference/status/overview 为非知识条目，豁免 type↔layer（各按本类别节校验）
+  - type↔layer 合法组合（entry_doctor 校验）：L1→log/report/correction（均 append-only 不可篡改）；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback；script-volume/constraint/reference/status/overview/project-spec/project-analysis 为非知识条目，豁免 type↔layer（各按本类别节校验）
   - overview 全景概览（type: overview，corr-2026-11-20-89）：纯人读项目地图（README），第四类别（knowledge/volume/governance/overview），落点 03-Atlas/README.md；豁免知识必填/layer/type↔layer，按 overview 节 OV_* 判据；不进 ROOT L0/SH-index 角色跳转、不进检索装配（read_orchestrator 类别过滤执行）、不结晶不升迁不进副库；UNREACHABLE 显式豁免（纯人读故意不挂路由）；断链沿 BROKEN_LINK(ERROR) 判；id 形态 ov-{yyyy}-{slug}
   - id 全局唯一
   - id 命名空间（联邦，见 id_namespace）：库根声明 `id-namespace: <slug>` 后，新建条目必须用本库前缀（`{kind}-{slug}-…`）；赋能复制的上游条目保留原 id 并标 `provenance: copied`（豁免前缀校验）；上提并入换主库号。未声明的主库豁免。entry_doctor 按 ID_NAMESPACE 校验
   - L1 日志正文四段 + session-task/touched/结论 append-only 不可篡改（更正只能新开日志 + corrections 引用）；frontmatter 描述字段(schema 合规可回填) 与派生指针(reflect-to/corrections 由流程回填) 不在此限——回填 frontmatter 不算篡改正文；L2 卡允许带卡内 changelog 的就地演进；**L3 规格按微词反馈修订，修订说明下沉至 04-Logs/corrections/（type:correction），规格正文只留当前态 + `[[corr-…]]` 指针，不再内嵌 changelog**（v0.7，Owner 2026-11-12；D17 的 Git 兜底不变）
-  - 底层目录嵌套分化（v0.7）：`04-Logs/logs/`=情景日志（四段+recency+自动装配）；`04-Logs/corrections/`=更正说明（独立模板+不进自动装配+不结晶）。层号不变，顶层不新增目录。correction 用 T-correction 模板、target 必填、正文三段（改了什么/为什么改/依据），entry_doctor 按 type 分流校验
+  - 底层目录嵌套分化（v0.7）：`04-Logs/logs/`=情景日志（四段+recency+自动装配）；`04-Logs/corrections/`=更正说明（独立模板+不进自动装配+不结晶）。层号不变。correction 用 T-correction 模板、target 必填、正文三段（改了什么/为什么改/依据），entry_doctor 按 type 分流校验
+  - 项目托管区（v0.7.6，Owner 2026-11-24 裁批准修订本约束，corr-2026-11-24-110）：新增顶层 `06-Project/`（specs/=项目流程规格 + issues/=问题分析件），第五类别 project 一族两 type，按 project 节 PROJ_* 判据；申报件复用 L1 type:report 落 04-Logs/（REPORT_FM 补执行）；整区 federation:never+对 runtime 零权威；「顶层不新增目录」原约束自本条起废止（此为唯一获批例外，再增顶层仍须 Owner 裁）
   - 真安全红线绝对生效（敏感信息不入库/不执行来路不明代码/不接云端上传）；谨慎性约束随 operating_mode 分级（D15）
 
 ## 修订说明（已下沉）

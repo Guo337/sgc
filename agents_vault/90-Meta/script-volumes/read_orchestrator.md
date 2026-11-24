@@ -2,12 +2,12 @@
 id: vol-read-orchestrator
 type: script-volume
 created: 2026-11-16
-last-touched: 2026-11-20
+last-touched: 2026-11-24
 source-of: 90-Meta/scripts/read_orchestrator.py
 fence: "````"
 eol: crlf
 depends-on: [vol-entry-doctor, vol-ttl-locator]
-sha256: 2aa1d89bafcf93f7e663ad54436f66a2692581f39fd8ab0638ba273ef6623a36
+sha256: 3e8d5610a86e53608df92ecbbb45c305cf37f8ef2e59597d232ca4ef33bff817
 ---
 ````python
 #!/usr/bin/env python3
@@ -44,6 +44,14 @@ one-hop neighbors — schema overview.exclusion.assembly=never, enforced here at
 points (_build_records / collect_candidates / full-text fallback / one-hop neighbors),
 not merely declared (E principle).
 
+v0.4.0 non-knowledge family filter (project zone wave, corr-2026-11-24-110): the
+filter set extends from {overview} to {overview} ∪ governance ∪ project — schema
+governance.exclusion.assembly=never and project.exclusion.assembly=never now both
+have an executor here (E principle). This closes the governance-family filter gap
+the v0.3.0 comment self-acknowledged ("scope 外只登记不修"): governance nodes were
+declared never-assembled but nothing enforced it. Type sets are imported from
+entry_doctor (GOV_TYPES/PROJ_TYPES) so the two tools cannot drift.
+
 Usage:
   python read_orchestrator.py --probe "EFG三原理"
   python read_orchestrator.py --probe "PPR" --domain knowledge-engineering --json
@@ -61,7 +69,7 @@ import sys, os, re, json, time, argparse, posixpath
 # depends-on: vol-entry-doctor, vol-ttl-locator (extract both before running)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from entry_doctor import (parse_fm, strip_code, as_name, load_vault, HARD_SKIP,
-                          WIKILINK_RE, MDLINK_ANY_RE, H1_RE)
+                          WIKILINK_RE, MDLINK_ANY_RE, H1_RE, GOV_TYPES, PROJ_TYPES)
 from ttl_locator import VaultResolutionError, resolve_vault
 
 try:
@@ -69,7 +77,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 SLICE = "P1-one-hop"
 
 # Budget defaults mirror schema.yaml `budgets:` (authoritative); used when schema unreadable
@@ -77,11 +85,14 @@ SLICE = "P1-one-hop"
 DEFAULT_BUDGETS = {"root_full": 2000, "root_L0": 500, "atlas_entry": 1000,
                    "card_summary": 50, "assembly": {"L3": 2000, "L2": 4000, "L1": 1000}}
 
-# overview（全景概览）：纯人读 README 地图，永不进检索装配（schema overview.exclusion.
-# assembly=never，corr-2026-11-20-89）。类别过滤是执行者（E 原理：非仅声明）——四处过滤：
-# _build_records / collect_candidates / 全文兜底 / 一跳邻居。硬编码 type 集合先例=doctor
-# GOV_TYPES（治理族过滤缺口系 P2 附带发现，scope 外只登记不修）。
+# 非知识类别过滤（v0.4.0，corr-2026-11-24-110）：overview（纯人读地图）+ 治理族
+# （constraint/reference/status）+ 项目族（project-spec/project-analysis）永不进检索
+# 装配——三者的 schema exclusion.assembly=never 在此有执行者（E 原理：非仅声明）。
+# 四处过滤：_build_records / collect_candidates / 全文兜底 / 一跳邻居。治理族既有
+# 缺口（v0.3.0 注释自认「scope 外只登记不修」）随本波闭合；type 集合 import 自
+# entry_doctor（GOV_TYPES/PROJ_TYPES），两工具不漂移。
 OVERVIEW_TYPES = {"overview"}
+NON_ASSEMBLY_TYPES = OVERVIEW_TYPES | GOV_TYPES | PROJ_TYPES
 
 CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 LATIN_WORD_RE = re.compile(r"[A-Za-z0-9_]+")
@@ -208,10 +219,10 @@ class OfflineReader:
         for rel, txt in self.files.items():
             fm, body = parse_fm(txt)
             fm = fm if isinstance(fm, dict) else {}
-            # overview 类别过滤（1/4）：纯人读地图不建记录——候选/装配/邻居/反链
-            # 全部消费 records，源头排除即全链排除（链接解析仍走 name_index，
-            # 指向 overview 的链接可解析、只是永不装配）。
-            if fm.get("type") in OVERVIEW_TYPES:
+            # 非知识类别过滤（1/4）：overview/治理族/项目族不建记录——候选/装配/
+            # 邻居/反链全部消费 records，源头排除即全链排除（链接解析仍走 name_index，
+            # 指向这些节点的链接可解析、只是永不装配）。
+            if fm.get("type") in NON_ASSEMBLY_TYPES:
                 continue
             h1 = H1_RE.search(body)
             aliases = fm.get("aliases")
@@ -308,8 +319,8 @@ class OfflineReader:
             return []
         hits = []
         for rel, rec in self.records.items():
-            if rec["type"] in OVERVIEW_TYPES:
-                continue   # overview 类别过滤（3/4）：全文兜底也不得命中纯人读地图
+            if rec["type"] in NON_ASSEMBLY_TYPES:
+                continue   # 非知识类别过滤（3/4）：全文兜底也不得命中 overview/治理/项目件
             c = rec["content"].lower().count(q)
             if c:
                 score = c
@@ -403,8 +414,8 @@ def collect_candidates(probe, reader):
     if not pl:
         return cands
     for rel, rec in reader.records.items():
-        if rec["type"] in OVERVIEW_TYPES:
-            continue   # overview 类别过滤（2/4）：永不进候选（防御性双保险）
+        if rec["type"] in NON_ASSEMBLY_TYPES:
+            continue   # 非知识类别过滤（2/4）：永不进候选（防御性双保险）
         aliases_l = [a.lower() for a in rec["aliases"]]
         name = as_name(rel).lower()
         h1 = (rec["h1"] or "").lower()
@@ -615,17 +626,17 @@ def orchestrate(probe, reader, filters=None, channel_pref="auto", budgets=None):
     fwd, seen = [], {target_rel}
 
     def _is_overview(r):
-        # overview 类别过滤（4/4）：一跳邻居永不装配纯人读地图（前向+反向同判）。
-        # 记录缺失≠安全：_build_records 已不建 overview 记录，但链接解析仍走
-        # name_index（磁盘文件），须回读原文件判 type，否则边指向的 overview 漏网。
+        # 非知识类别过滤（4/4）：一跳邻居永不装配 overview/治理/项目件（前向+反向同判）。
+        # 记录缺失≠安全：_build_records 已不建这些记录，但链接解析仍走
+        # name_index（磁盘文件），须回读原文件判 type，否则边指向的非知识节点漏网。
         nrec = reader.records.get(r)
         if nrec is not None:
-            return nrec["type"] in OVERVIEW_TYPES
+            return nrec["type"] in NON_ASSEMBLY_TYPES
         txt = reader.files.get(r)
         if txt is None:
             return False
         fm, _ = parse_fm(txt)
-        return isinstance(fm, dict) and fm.get("type") in OVERVIEW_TYPES
+        return isinstance(fm, dict) and fm.get("type") in NON_ASSEMBLY_TYPES
 
     for e in forward_edges(trec):
         r = reader._resolve(e["link"])
@@ -793,6 +804,46 @@ def self_test():
     ra2 = orchestrate("阿尔法", oreader, budgets=budgets)
     ck("OV_KNOWLEDGE_INTACT", ra2["status"] == "hit"
        and ra2["route"]["target"] == "02-Cards/alpha.md")
+
+    # 治理族+项目族过滤（v0.4.0，corr-2026-11-24-110）：assembly=never 的另两族
+    # 同判——记录不建、探针/兜底不命中、邻居（前向+反向）被过滤兜住。治理族缺口
+    # （v0.3.0 自认登记不修）就此闭合。
+    gov_txt = ("---\nid: gov-2026-demo\ntype: constraint\nstatus: ACTIVE\npriority: P1\n"
+               "scope: workspace-agent\ncreated: 2026-11-24\nlast-touched: 2026-11-24\n"
+               "---\n# GOVDEMO\n治理约束 alpha 阿尔法：[[alpha]] 相关。\n")
+    proj_txt = ("---\nid: proj-2026-demo\ntype: project-spec\nproject: demo\nowner: demo-owner\n"
+                "status: ACTIVE\ncreated: 2026-11-24\nlast-touched: 2026-11-24\n"
+                "summary: 项目规格 alpha 阿尔法\n---\n# PROJDEMO\n项目流程：[[alpha]] 相关。\n")
+    gp_files = dict(files)
+    gp_files["05-Governance/gov-demo.md"] = gov_txt
+    gp_files["06-Project/specs/proj-demo.md"] = proj_txt
+    # epsilon：知识卡带指向两族节点的 e 边 + 正文提及（两族也回链 epsilon → 反向过滤）
+    gp_files["02-Cards/epsilon.md"] = card(
+        "c-e", "epsilon", "test", [], [("GOVDEMO", "co_occurs", 0.5), ("PROJDEMO", "co_occurs", 0.5)],
+        "epsilon 卡", "正文提到 [[GOVDEMO]] 与 [[PROJDEMO]]。")
+    greader = OfflineReader.from_files(gp_files)
+    ck("GOV_PROJ_NO_RECORD", "05-Governance/gov-demo.md" not in greader.records
+       and "06-Project/specs/proj-demo.md" not in greader.records)
+    ck("GOV_PROJ_NOT_CANDIDATE",
+       not any(rel in ("05-Governance/gov-demo.md", "06-Project/specs/proj-demo.md")
+               for _, rel, _, _ in collect_candidates("阿尔法", greader)))
+    ck("GOV_PROJ_NOT_FALLBACK",
+       not any(h["filename"] in ("05-Governance/gov-demo.md", "06-Project/specs/proj-demo.md")
+               for h in greader.search("治理约束"))
+       and not any(h["filename"] in ("05-Governance/gov-demo.md", "06-Project/specs/proj-demo.md")
+                   for h in greader.search("项目流程")))
+    rep = orchestrate("epsilon", greader, budgets=budgets)
+    ck("GOV_PROJ_NOT_NEIGHBOR",
+       rep["status"] == "hit" and rep["route"]["target"] == "02-Cards/epsilon.md"
+       and not any(n["path"] in ("05-Governance/gov-demo.md", "06-Project/specs/proj-demo.md")
+                   for n in rep["one_hop"]["forward"])
+       and not any(n["path"] in ("05-Governance/gov-demo.md", "06-Project/specs/proj-demo.md")
+                   for n in rep["one_hop"]["reverse"])
+       and not any(n["path"] in ("05-Governance/gov-demo.md", "06-Project/specs/proj-demo.md")
+                   for n in rep["budget"]["text"]["neighbors"]))
+    ra3 = orchestrate("阿尔法", greader, budgets=budgets)
+    ck("GOV_PROJ_KNOWLEDGE_INTACT", ra3["status"] == "hit"
+       and ra3["route"]["target"] == "02-Cards/alpha.md")
 
     print("read_orchestrator --self-test（内置 in-memory fixture，未写盘）")
     ok = True

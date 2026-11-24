@@ -9,7 +9,7 @@ domain: [memory-governance, knowledge-engineering]
 maturity: growing
 operating-mode: fast-iterate
 created: 2026-09-25
-last-touched: 2026-11-22
+last-touched: 2026-11-24
 summary: TTL记忆总库唯一根入口，L0常驻层(含operating-mode)+H2按需展开
 ---
 
@@ -31,7 +31,7 @@ summary: TTL记忆总库唯一根入口，L0常驻层(含operating-mode)+H2按�
 
 ## 访问模型与通道
 
-> 权威原本见 [[SPEC-READ#访问通道]] 与 [[SPEC-READ#两层记忆与调取通道]]（v0.7.7，D29/D30/D31/D33/D33-b）；本节为 L0 下沉全文，冲突以 SPEC-READ 为准。
+> 权威原本见 [[SPEC-READ#访问通道]] 与 [[SPEC-READ#两层记忆与调取通道]]（v0.7.8，D29/D30/D31/D33/D33-b）；本节为 L0 下沉全文，冲突以 SPEC-READ 为准。
 
 **访问模型（读取按环境分流，D30/D31）**：**读取**——有 MCP 工具表（Qoder / VSCode Copilot）主走**插件 MCP**；无 MCP 主走**插件 REST 只读端点**（[[REST读库速查]]，助手 `90-Meta/scripts/rest_read.py`，先身份探针）；皆不可用退官方 CLI 读命令；CLI 也不可用时**退离线 grep/Python 须 Owner 批准（D33），不得自行降级**。**写入**主走**官方 `obsidian` CLI**（第一方、byte-exact、需 App 运行），不经 MCP/REST。只读白名单：Qoder 纯自律 / VSCode 配置级硬过滤+子 Agent 继承（红线 A.6，[[MCP配置级白名单与使用手感]]）。
 
@@ -41,7 +41,7 @@ summary: TTL记忆总库唯一根入口，L0常驻层(含operating-mode)+H2按�
 
 > 权威原本见 [[SPEC-GOVERN]] §doctor 闸门；本节为 L0 下沉全文，冲突以 SPEC-GOVERN 为准。
 
-doctor 真值源是脚本卷 `90-Meta/script-volumes/entry_doctor.md`（.py 无常驻文件）——先从卷抽取 .py（二进制切片，比 sha256）再跑 `python <抽取件> --vault <库根>`；只读、离线纯标准库扫全库，报 ERROR/WARN/INFO（每条带 `rule`+`fix`），退出码 0=无 ERROR。App 在跑时加 `--use-cli` 叠加官方第一方 `obsidian` CLI 自动对账（分类一致/离线误报/CLI 漏判/非 wikilink 目标；不可用则优雅降级离线）；`--self-test` 跑内置自检（全部注册规则+BROKEN_SET/ID_NAMESPACE/VOL_RULES/VOL_DEPS/DOC_IMPL_DRIFT/PARSER_V27/CLI_RECONCILE/CLI_VAULT_PIN/CLI_UTF8_DECODE）；`--json` 机读。当前 [[entry_doctor#VERSION|doctor v2.16.0]]（G20 对账：VERSION 漂移 ERROR；解析层=CommonMark 子集围栏扫描+严格 frontmatter 子集；治理族 GOV_*+概览 OV_* 替代判据+类别四分；枢纽 HUB_* 解压对账+secondary-type；pitfall TRIGGER_FM 触发契约；SH 投影 ATLAS_GROUP 对账；副库 id-namespace 豁免治理族存在性+主库历史锚，corr-105）。抽取工具：[[vol_extract]]（`python vol_extract.py <vol-id> --vault <库根>`，递归解析 depends-on；根依赖 [[ttl_locator]] 亦为卷）。
+doctor 真值源是脚本卷 `90-Meta/script-volumes/entry_doctor.md`（.py 无常驻文件）——先从卷抽取 .py（二进制切片，比 sha256）再跑 `python <抽取件> --vault <库根>`；只读、离线纯标准库扫全库，报 ERROR/WARN/INFO（每条带 `rule`+`fix`），退出码 0=无 ERROR。App 在跑时加 `--use-cli` 叠加官方第一方 `obsidian` CLI 自动对账（分类一致/离线误报/CLI 漏判/非 wikilink 目标；不可用则优雅降级离线）；`--self-test` 跑内置自检（全部注册规则+BROKEN_SET/ID_NAMESPACE/VOL_RULES/VOL_DEPS/DOC_IMPL_DRIFT/PARSER_V27/CLI_RECONCILE/CLI_VAULT_PIN/CLI_UTF8_DECODE）；`--json` 机读。当前 [[entry_doctor#VERSION|doctor v2.17.0]]（G20 对账：VERSION 漂移 ERROR；解析层=CommonMark 子集围栏扫描+严格 frontmatter 子集；治理族 GOV_*+概览 OV_*+项目族 PROJ_* 替代判据+类别五分；REPORT_FM 补执行 L1 申报必填；枢纽 HUB_* 解压对账+secondary-type；pitfall TRIGGER_FM 触发契约；SH 投影 ATLAS_GROUP 对账；副库 id-namespace 豁免治理族存在性+主库历史锚，corr-105；自检 CLI_VAULT_PIN fixture 平台门控，POSIX 可过，corr-106；项目托管区 06-Project，corr-110）。抽取工具：[[vol_extract]]（`python vol_extract.py <vol-id> --vault <库根>`，递归解析 depends-on；根依赖 [[ttl_locator]] 亦为卷）。
 
 ## 分区一览（L0 常驻，以下标题即目录）
 
@@ -53,11 +53,12 @@ doctor 真值源是脚本卷 `90-Meta/script-volumes/entry_doctor.md`（.py 无�
 - [SPEC-WRITE](01-Specs/SPEC-WRITE.md): 写入规格书——记入、归档、结晶、更正、敏感过滤
 - [SPEC-GOVERN](01-Specs/SPEC-GOVERN.md): 治理规格书——开源式 branch→审核=并入→main、申报报告、doctor 闸门、角色与权限
 - [05-Governance 导航](05-Governance/00-INDEX.md): 治理族（Agent 行为约束/项目状态治理，原 Agent-Governance/ 已整体内迁并退役，入口 [00-ENTRY](05-Governance/00-ENTRY.md)）——非知识条目，GOV_* 替代判据；与 01-Specs 分权（两条 precedence）
+- `06-Project 项目托管区`: 项目流程规格（specs/）+问题分析件（issues/）——第五类别 project，内容权威在项目 Owner、对 runtime 零权威，PROJ_* 替代判据；申报件=L1 report 落 04-Logs/；整区不复制不上提（corr-2026-11-24-110）
 - Atlas 立体目录 `03-Atlas/`: [[SH-index]] 身份根（大类跳转+域目录）→ `{domain}/SH-{domain}.md` 域入口（域内优先于本文件）→ `{domain}/roles/` 角色义务包；现有 [[SH-knowledge-engineering]]
 - [副库建库引导](02-Cards/副库建库引导.md): 新项目 Agent 从本 Alpha 内核赋能建立副库的可走路径（建库→运转，两轮试建验证 0E）
 - [上提验收流程](02-Cards/上提验收流程.md): 副库普适经验上提主库的验收并入六步（联邦机制 3，vplc-001 首次端到端实证）
 - [schema.yaml](90-Meta/schema.yaml): frontmatter 唯一权威定义
-- 底层 `04-Logs/`（L1 链层，嵌套分化 v0.7）：`logs/`=情景日志（四段+recency+自动装配）；`corrections/`=规格更正说明（type:correction，独立模板，**不进自动装配、不结晶**，顺规格 `[[corr-…]]` 指针按需展开）。层号不变、顶层不新增目录
+- 底层 `04-Logs/`（L1 链层，嵌套分化 v0.7）：`logs/`=情景日志（四段+recency+自动装配）；`corrections/`=规格更正说明（type:correction，独立模板，**不进自动装配、不结晶**，顺规格 `[[corr-…]]` 指针按需展开）；申报报告（type:report，REPORT_FM 校验）亦落此层。层号不变；顶层新增 06-Project/ 系 Owner 批准的唯一例外（schema constraints，corr-2026-11-24-110）
 - MAP.yaml `90-Meta/MAP.yaml`: 机器可读总映射（脚本维护，暂缺，Retrieval Stage 2 生成）。**编号轴**：`P0–P4`=TTL 整体实施阶段，`SPEC-READ Stage 0–3`=读取/检索管线内部阶段；两轴独立、不互相编号、不互相替代。
 
 ## 路由表

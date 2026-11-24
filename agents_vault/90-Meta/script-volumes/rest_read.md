@@ -2,12 +2,12 @@
 id: vol-rest-read
 type: script-volume
 created: 2026-11-16
-last-touched: 2026-11-20
+last-touched: 2026-11-25
 source-of: 90-Meta/scripts/rest_read.py
 fence: "````"
 eol: crlf
 depends-on: [vol-ttl-locator]
-sha256: 01da7702a08f5ab169bd34c61996e147a556c1d13b195426ed4805912e82a87b
+sha256: 355c2c763a7ce3231e428f96538d21efa220da45add89712002ba11201008ceb
 ---
 ````python
 #!/usr/bin/env python3
@@ -73,7 +73,7 @@ try:
 except Exception:
     pass
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 # Read-only allowlist of routes this helper will ever touch. Anything outside
 # this set is refused by construction (the helper has no write code path).
@@ -214,7 +214,9 @@ def identity_probe(client: RestClient, vault: str) -> str:
     vault collision is caught before any answer is trusted.
     """
     disk_path = os.path.join(vault, "00-ROOT.md")
-    with io.open(disk_path, "r", encoding="utf-8") as f:
+    # newline="" keeps raw CRLF bytes: universal-newline translation would
+    # fake a MISMATCH against REST on Windows autocrlf checkouts (sgc#1).
+    with io.open(disk_path, "r", encoding="utf-8", newline="") as f:
         disk_hash = sha256_text(f.read())
     _, remote = client.read("00-ROOT.md")
     remote_hash = sha256_text(remote)
@@ -371,7 +373,8 @@ def self_test() -> int:
             check("CONFIG_NOKEY", True)
 
         # 4. identity probe MATCH (fake client returning disk content)
-        with io.open(os.path.join(vault, "00-ROOT.md"), encoding="utf-8") as f:
+        with io.open(os.path.join(vault, "00-ROOT.md"), encoding="utf-8",
+                     newline="") as f:
             disk_text = f.read()
 
         class FakeClient:
@@ -390,6 +393,15 @@ def self_test() -> int:
             check("IDENTITY_MISMATCH", False)
         except RestReadError:
             check("IDENTITY_MISMATCH", True)
+
+        # 5b. CRLF regression (sgc#1): disk file with CRLF, REST returns the
+        # same raw bytes -> must MATCH (universal-newline read faked MISMATCH)
+        crlf_text = "# root\r\nidentity-anchor\r\n"
+        with io.open(os.path.join(vault, "00-ROOT.md"), "w",
+                     encoding="utf-8", newline="") as f:
+            f.write(crlf_text)
+        h = identity_probe(FakeClient(crlf_text), vault)
+        check("IDENTITY_CRLF", h == sha256_text(crlf_text))
 
         # 6. read-only contract: client exposes no write method
         write_methods = [m for m in dir(RestClient)

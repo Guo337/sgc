@@ -2,7 +2,7 @@
 id: ov-2026-readme
 type: overview
 created: 2026-11-20
-last-touched: 2026-11-23
+last-touched: 2026-11-24
 summary: TTL 项目全景地图（纯人读）：是什么/设计取向/运作/拓扑/Clone&Run/权威地图/出处；非定义非法律，Agent 执行任务不加载本件
 aliases: [Project Map, 项目地图]
 ---
@@ -130,7 +130,7 @@ python3 agents_vault/90-Meta/scripts/read_orchestrator.py --probe "doctor" --vau
 - **vault 定位**：`--vault` → `TTL_VAULT` 环境变量 → 用户 TOML 配置 → 从 cwd 向上发现 → 脚本在 vault 内时 legacy 兜底。
 - **克隆不含**（.gitignore 刻意排除）：`.venv/`、`agents_vault/.obsidian/plugins/`（含 REST 插件密钥——密钥不入库）、`community-research/`（第三方快照）。
 - **完整体验（可选）**：用 Obsidian 打开 `agents_vault/`；MCP/REST 读取通道自行安装 Local REST API 插件并生成自己的 API key。写入主通道=官方 `obsidian` CLI + App 运行。
-- **路径与换行符无关性已实测**：全新 clone 到任意路径后闸门/自检/探针/定位全通过，tracked 代码无硬编码绝对路径；仓根 `.gitattributes` 标脚本卷 `-text`，Windows（autocrlf=true）与 Linux/macOS（autocrlf=input）双态 clone 实测卷字节保真、抽取+doctor 全绿（2026-11-22，独立评估 V11 回归）。
+- **路径与换行符无关性已实测**：全新 clone 到任意路径后闸门/自检/探针/定位全通过（Windows 实测），tracked 代码无硬编码绝对路径；仓根 `.gitattributes` 标脚本卷 `-text`，Windows（autocrlf=true）与 Linux/macOS（autocrlf=input）双态 clone 实测卷字节保真、抽取+doctor 全绿（2026-11-22，独立评估 V11 回归）。**双态实测范围=卷字节保真+抽取+doctor**；`--self-test` 当时仅 Windows 实测——POSIX 上 CLI_VAULT_PIN 的 Windows 盘符 fixture 必失败（外部 Linux 评审发现，v2.16.1 平台门控修复+POSIX 模拟验证，真 Linux 重验待外部确认，corr-106）。
 
 ## 6. Authority Map
 
