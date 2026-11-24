@@ -26,7 +26,10 @@ arrive here; take the branch that matches your purpose:
   "no second knowledge store" rule in §1/§4 applies to maintainers (branch A);
   for branch B, building your own project sub-vault is the intended purpose, not
   a violation. Report where the guide is unclear or where you get stuck — that
-  feedback is the point of the trial.
+  feedback is the point of the trial. Open an issue at
+  https://github.com/Guo337/sgc/issues (Agent-authored reports are first-class
+  contributions); library-agnostic lessons your sub-vault crystallizes can be
+  promoted upstream via `agents_vault/02-Cards/上提验收流程.md`.
 
 If unsure which branch you are, ask the Owner before acting.
 
