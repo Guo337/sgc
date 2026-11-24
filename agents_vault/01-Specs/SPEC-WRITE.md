@@ -57,7 +57,7 @@ L1 记入与派生指针回填统一走 `90-Meta/scripts/append_log.py`（真值
 - **四守卫**：防重复（新 id 不得已存在、目标文件不得已存在 -> 绝不覆盖历史）；append-only（backfill 只改 frontmatter 目标字段，校验正文不变）；**ifMatch 式防漂移**（离线用内容 sha256 复刻 Local REST API 的 `version` token：`--expect-hash` 不符则 exit 3 中止、文件不动）；**block-style fail-loud**（目标字段若被 Obsidian UI/REST 重排为 block 风格 YAML，离线 inline 写法会孤儿化其值 -> 检测到即 exit 3 拒绝、不静默丢数据，见 [[PIT-frontmatter重排为block风格]]）。
 - **三通道**（`--channel`）：`cli`（**默认、写入主通道**——官方 `obsidian create`：new-log -> create、backfill -> create overwrite，均字节精确；CLI 不可用（启动器缺失 / App 不可达 / 活动 vault 不符 / 内容含字面 `\n`-`\t`）时**显式降级 offline**，写后回读逐字节校验）/ `offline`（原子文件写兜底，self-test 覆盖，CLI 降级目标，逐字节精确）/ `rest`（**可选、只读** Local REST API 适配器，第三方插件由用户自装、TTL 不代装不代跑；`--key-from-plugin` 运行时从插件 data.json in-memory 读 apiKey（该文件已 gitignore、绝不打印/落盘），或 `OLR_API_URL`/`OLR_API_KEY` 由用户 env 提供、禁写入任何层级；**仅 GET document-map 验连通 + 取 ifMatch `version` token**，`--apply` 明确拒绝——实测发现插件 frontmatter PATCH 会把整个 YAML 从 inline 重排为 block 风格并剥引号，破坏本库 inline 约定 + 离线 `parse_inline_list`（静默读空），见 [[PIT-frontmatter重排为block风格]]；绝不调用 POST/PATCH/delete/move/command_execute/eval）。
 - 退出码：0 成功 / 2 工具错误 / 3 守卫拒绝（重复/漂移/append-only/block-style）。`--self-test` 离线自检 10 规则。
-- **版本与输出流**（v0.3.0，2026-11-13）：工具持 `VERSION` 常量（与 entry_doctor / read_orchestrator / reflect 同惯例）；**全部输出（含 `vault not found` / `GUARD REJECTED` / `ERROR`）走 stdout**，与其余三个入口统一，调用方只需接一个流；退出码与四守卫语义不变。见 [[corr-2026-11-13-37]]。
+- **版本与输出流**（v0.3.0，2026-11-13）：工具持 `VERSION` 常量（与 entry_doctor / read_orchestrator / reflect 同惯例）；**全部输出（含 `vault not found` / `GUARD REJECTED` / `ERROR`）走 stdout**，与其余三个入口统一，调用方只需接一个流；退出码与四守卫语义不变。见 corr-2026-11-13-37（修订指针）。
 
 ## 记入协议（L1，会话结束时执行）
 
