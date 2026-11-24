@@ -29,3 +29,5 @@ Desktop.ini
 .env
 secrets.*
 temp/
+# Commit message scratch files (transient, never track)
+_tmp_msg.txt
