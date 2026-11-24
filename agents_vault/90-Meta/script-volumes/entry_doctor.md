@@ -2,12 +2,12 @@
 id: vol-entry-doctor
 type: script-volume
 created: 2026-11-16
-last-touched: 2026-11-24
+last-touched: 2026-11-25
 source-of: 90-Meta/scripts/entry_doctor.py
 fence: "````"
 eol: crlf
 depends-on: [vol-ttl-locator]
-sha256: bcb417e14f37cae48b1da0357ec34ec969e3c80c5c52b723cc416b590fab05b4
+sha256: 0ebc8bceff6feed00b53944ebff157e1aa6d9f377b668e724d152b17b3f2017b
 ---
 ````python
 #!/usr/bin/env python3
@@ -122,7 +122,7 @@ try:
 except Exception:
     pass
 
-VERSION = "2.17.0"
+VERSION = "2.18.0"
 STALE_DAYS = 180
 SUMMARY_SOFT_CHARS = 120          # rough character proxy for the "summary <= 50 tokens" rule
 
@@ -2053,6 +2053,259 @@ def rule_status_size(model, report):
                    "瘦身：历史叙述下沉 L1，只留当前态+指针")
 
 
+# ---------------------------------------------------------------- federation rules (v2.18.0)
+# Revision-rights contract (corr-112/117): copied spec files (provenance: copied)
+# are governed by schema federation_class three-tier map. Main-vault own specs
+# have no upstream baseline -> FED_* never fires on them. Carrier = external
+# schema list (ruling 甲); keys = verbatim H2 titles / top-level schema keys.
+
+FED_LEVELS = {"redline", "parameter", "free", "mixed"}
+FED_SPEC_MAP = {"SPEC-READ.md": "spec_read", "SPEC-WRITE.md": "spec_write",
+                "SPEC-GOVERN.md": "spec_govern"}
+H2_RE = re.compile(r"(?m)^##\s+(.+?)\s*$")
+
+
+def _fed_schema_text(model):
+    txt = model.files.get(SCHEMA_REL)
+    if txt is None and model.vault_root:
+        p = os.path.join(model.vault_root, SCHEMA_REL.replace("/", os.sep))
+        if os.path.isfile(p):
+            try:
+                with open(p, encoding="utf-8") as fh:
+                    txt = fh.read()
+            except Exception:
+                txt = None
+    return txt
+
+
+def _fed_parse_map(txt):
+    """Parse federation_class block (flat line parse). Returns
+    {maps: {subsection: {key: level}}, default: level}; None when absent."""
+    if not txt:
+        return None
+    lines = txt.splitlines()
+    out, sub, in_block = {}, None, False
+    default = "redline"
+    for ln in lines:
+        if re.match(r"^federation_class:\s*", ln):
+            in_block = True; continue
+        if in_block and re.match(r"^[A-Za-z_]", ln) and not ln.startswith(" "):
+            break   # next top-level key ends the block
+        if not in_block:
+            continue
+        msub = re.match(r"^  ([A-Za-z_]+):\s*(.*)$", ln)
+        if msub:
+            name, rest = msub.group(1), msub.group(2)
+            if name == "default":
+                default = rest.split("#")[0].strip() or "redline"
+                sub = None
+            elif name in ("levels", "upstream_cache", "deviation"):
+                sub = None   # non-map subsections
+            else:
+                sub = name; out.setdefault(sub, {})
+            continue
+        if sub:
+            mk = re.match(r'^    "?([^":]+)"?:\s*([a-z]+)', ln)
+            if mk:
+                out[sub][mk.group(1).strip()] = mk.group(2)
+    if not out:
+        return None
+    return {"maps": out, "default": default}
+
+
+def _fed_sections(body):
+    """Split spec body into H2 sections: {title: section_text}. Text before the
+    first H2 (H1 + intro) is ignored. Section text excludes the heading line."""
+    secs, cur, buf = {}, None, []
+    for ln in body.splitlines():
+        m = H2_RE.match(ln)
+        if m:
+            if cur is not None:
+                secs[cur] = "\n".join(buf)
+            cur, buf = m.group(1).strip(), []
+        elif cur is not None:
+            buf.append(ln)
+    if cur is not None:
+        secs[cur] = "\n".join(buf)
+    return secs
+
+
+def _fed_norm(s):
+    """Normalize section text for comparison: EOL + trailing whitespace stripped
+    per line, blank lines collapsed (EOL-agnostic, audit R7)."""
+    lines = [ln.rstrip() for ln in s.replace("\r\n", "\n").split("\n")]
+    return "\n".join(ln for ln in lines if ln.strip())
+
+
+def _fed_copied_specs(model):
+    """rel paths of copied spec files subject to federation governance."""
+    out = []
+    for rel in sorted(model.files):
+        fm = model.parsed[rel][0]
+        if not isinstance(fm, dict):
+            continue
+        if fm.get("provenance") != "copied":
+            continue
+        base = os.path.basename(rel)
+        if base in FED_SPEC_MAP or base == "schema.yaml":
+            out.append(rel)
+    return out
+
+
+def _fed_cache_baseline(model, rel):
+    """Return upstream baseline body for a copied spec from 90-Meta/upstream/,
+    or None when no cache (FED_VERSION handles missing cache separately)."""
+    base = os.path.basename(rel)
+    cache_rel = "90-Meta/upstream/" + base
+    txt = model.files.get(cache_rel)
+    if txt is None and model.vault_root:
+        p = os.path.join(model.vault_root, cache_rel.replace("/", os.sep))
+        if os.path.isfile(p):
+            try:
+                with open(p, encoding="utf-8") as fh:
+                    txt = fh.read()
+            except Exception:
+                txt = None
+    if txt is None:
+        return None
+    _, body = parse_fm(txt)
+    return body
+
+
+def rule_fed_decl(model, report):
+    """FED_DECL four-state matrix (conffile three-hash isomorph, audit edge 1):
+    pristine / declared-deviation / undeclared-deviation(ERROR) / empty-declaration(WARN).
+    Compares each non-free section against upstream cache baseline; local-revisions
+    frontmatter list ({section, corr} flow-map strings) is the authorization evidence."""
+    fed = _fed_parse_map(_fed_schema_text(model))
+    if fed is None:
+        return
+    for rel in _fed_copied_specs(model):
+        fm, body, _ = model.parsed[rel]
+        base = os.path.basename(rel)
+        sub = FED_SPEC_MAP.get(base, "schema_self")
+        cmap = fed["maps"].get(sub, {})
+        baseline = _fed_cache_baseline(model, rel)
+        if baseline is None:
+            continue   # FED_VERSION reports missing cache
+        base_secs = _fed_sections(baseline)
+        local_secs = _fed_sections(body)
+        decls = fm.get("local-revisions") or []
+        declared = {}
+        for d in decls:
+            ms = re.search(r"section:\s*([^,}]+)", str(d))
+            if ms:
+                declared[ms.group(1).strip().strip("\"'")] = str(d)
+        for title, ltxt in local_secs.items():
+            level = cmap.get(title, fed["default"])
+            if level == "free":
+                continue
+            btxt = base_secs.get(title)
+            if btxt is None:
+                continue   # new section: FED_REDLINE / re-sync handles
+            changed = _fed_norm(ltxt) != _fed_norm(btxt)
+            if changed and title not in declared:
+                report(rel, "ERROR", "FED_DECL",
+                       "未声明偏离: 节「%s」相对上游基线已改但无 local-revisions 声明（级=%s）" % (title, level),
+                       "补 frontmatter local-revisions 条目 {section: \"%s\", corr: [[本库corr]]}；红线节另触 FED_REDLINE" % title)
+            elif not changed and title in declared:
+                report(rel, "WARN", "FED_DECL",
+                       "空声明: 节「%s」有 local-revisions 声明但正文与基线一致（幽灵条目）" % title,
+                       "清理该声明（回流采纳后忘删？）；声明须锚真实偏离")
+        for title in declared:
+            if title not in local_secs:
+                report(rel, "WARN", "FED_DECL",
+                       "空声明: 声明节「%s」在正文不存在（失锚）" % title,
+                       "清理失锚声明或核对节名")
+
+
+def rule_fed_redline(model, report):
+    """FED_REDLINE: redline/mixed section changed vs upstream baseline = ERROR.
+    federation_class block itself is exempt (contract carrier legal evolution).
+    parameter/free changes are legal (FED_DECL governs declaration)."""
+    fed = _fed_parse_map(_fed_schema_text(model))
+    if fed is None:
+        return
+    for rel in _fed_copied_specs(model):
+        fm, body, _ = model.parsed[rel]
+        base = os.path.basename(rel)
+        sub = FED_SPEC_MAP.get(base, "schema_self")
+        cmap = fed["maps"].get(sub, {})
+        baseline = _fed_cache_baseline(model, rel)
+        if baseline is None:
+            continue
+        base_secs = _fed_sections(baseline)
+        local_secs = _fed_sections(body)
+        decls = fm.get("local-revisions") or []
+        declared = set()
+        for d in decls:
+            ms = re.search(r"section:\s*([^,}]+)", str(d))
+            if ms:
+                declared.add(ms.group(1).strip().strip("\"'"))
+        for title, ltxt in local_secs.items():
+            level = cmap.get(title, fed["default"])
+            if level not in ("redline", "mixed"):
+                continue
+            if base == "schema.yaml" and title == "federation_class":
+                continue   # self-reference exemption
+            btxt = base_secs.get(title)
+            if btxt is None:
+                report(rel, "ERROR", "FED_REDLINE",
+                       "红线节失锚: 上游基线无节「%s」（上游删节/改名？），本地存在" % title,
+                       "re-sync 显式呈裁节集合变化，不静默模糊匹配")
+                continue
+            if _fed_norm(ltxt) != _fed_norm(btxt):
+                # mixed = section redline + parameter whitelist (D1). First version
+                # whitelist is empty -> a declared deviation on a mixed section is
+                # the parameter-change path (legal content, FED_DECL governs the
+                # declaration). Pure redline sections admit no local change.
+                if level == "mixed" and title in declared:
+                    continue
+                report(rel, "ERROR", "FED_REDLINE",
+                       "红线区改动: 节「%s」（级=%s）相对上游基线已改——红线不可本地改" % (title, level),
+                       "还原红线节正文；机制修正走上游 issue 回流；参数取值改走白名单（D1）")
+
+
+def rule_fed_version(model, report):
+    """FED_VERSION: copied spec missing upstream cache = WARN; missing
+    upstream-version declaration = INFO. Also reconciles federation_class keys
+    against the live main-vault spec heading tree (fail-loud on stale keys)."""
+    fed = _fed_parse_map(_fed_schema_text(model))
+    if fed is None:
+        return
+    for base, sub in FED_SPEC_MAP.items():
+        rel = "01-Specs/" + base
+        txt = model.files.get(rel)
+        if txt is None:
+            continue
+        _, body = parse_fm(txt)
+        live = set(_fed_sections(body))
+        cmap = fed["maps"].get(sub, {})
+        for key in cmap:
+            if key not in live:
+                report(SCHEMA_REL, "ERROR", "FED_VERSION",
+                       "分级表键失锚: %s 无 H2「%s」（实物标题树不符）" % (base, key),
+                       "按实物标题树重盘 federation_class 键（逐字 H2），失锚 fail-loud 不静默")
+    for rel in _fed_copied_specs(model):
+        fm, body, _ = model.parsed[rel]
+        base = os.path.basename(rel)
+        cache_rel = "90-Meta/upstream/" + base
+        has_cache = cache_rel in model.files
+        if not has_cache and model.vault_root:
+            has_cache = os.path.isfile(os.path.join(
+                model.vault_root, cache_rel.replace("/", os.sep)))
+        if not has_cache:
+            report(rel, "WARN", "FED_VERSION",
+                   "copied 规格缺上游快照缓存 %s（离线无法校验偏离）" % cache_rel,
+                   "复制时带入上游基线快照（双锚：upstream-commit/sha256/upstream-version）")
+            continue
+        uv = fm.get("upstream-version")
+        if not uv:
+            report(rel, "INFO", "FED_VERSION",
+                   "copied 规格缺 upstream-version 声明（版本锚）",
+                   "补 frontmatter upstream-version（复制自上游哪个版本）")
+
+
 RULES = [
     Rule("FM_MISSING", "file", rule_fm_missing),
     Rule("FIELD_MISSING", "file", rule_field_missing, applies=("knowledge",)),
@@ -2101,6 +2354,9 @@ RULES = [
     Rule("HUB_GROUNDS", "graph", rule_hub_grounds, level="WARN", since="2.9.0", applies=("knowledge",)),
     Rule("HUB_DECOMPRESSION", "graph", rule_hub_decompression, level="WARN", since="2.9.0", applies=("knowledge",)),
     Rule("SECONDARY_TYPE", "file", rule_secondary_type, since="2.9.0", applies=("knowledge",)),
+    Rule("FED_DECL", "cross", rule_fed_decl, since="2.18.0"),
+    Rule("FED_REDLINE", "cross", rule_fed_redline, since="2.18.0"),
+    Rule("FED_VERSION", "cross", rule_fed_version, since="2.18.0"),
 ]
 
 
@@ -3323,6 +3579,90 @@ def self_test():
     print("  [%s] %-14s %s" % ("OK" if proj_ok else "MISS", "PROJ_RULES",
                                 "项目族契约正确（干净件零告警+UNREACHABLE豁免，PROJ_FM/KNOWLEDGE_FIELD/PLACEMENT/ENTRY/EDGE_BAN+REPORT_FM 各触发，知识规则不泄漏，副库 proj-* 豁免 ID_NAMESPACE）" if proj_ok else
                                 "PROJ_*/REPORT_FM 触发或豁免不符预期"))
+    # federation revision-rights (v2.18.0): copied spec governed by federation_class;
+    # main-vault own specs never fire; four-state FED_DECL + FED_REDLINE + key fail-loud.
+    fed_schema = (
+        "federation_class:\n"
+        "  default: redline\n"
+        "  levels: [redline, parameter, free, mixed]\n"
+        "  spec_read:\n"
+        '    "职责边界": redline\n'
+        '    "装配预算（硬上限）": mixed\n'
+        '    "修订说明（已下沉）": free\n'
+        "constraints:\n  - x\n")
+    fed_base = ("---\nid: spec-read-up\ntype: spec\n---\n# SPEC-READ up\n"
+                "## 职责边界\n读取分权。\n"
+                "## 装配预算（硬上限）\nL3 2000。\n"
+                "## 修订说明（已下沉）\n上游史。\n")
+    fed_files = {
+        "00-ROOT.md": ("---\nid: spec-root-000\ntype: spec\nproject: p\ndomain: [t]\n"
+                       "maturity: growing\ncreated: 2026-11-25\nlast-touched: 2026-11-25\n"
+                       "summary: root\nid-namespace: demo\n---\n# ROOT\n"),
+        "90-Meta/schema.yaml": fed_schema,
+        "90-Meta/upstream/SPEC-READ.md": fed_base,
+        # clean copied spec: identical to baseline + upstream-version -> no FED_*
+        "01-Specs/SPEC-READ.md": ("---\nid: spec-read\ntype: spec\nprovenance: copied\n"
+                                  "source: \"[[up]]\"\nupstream-version: v1\n---\n"
+                                  "# SPEC-READ up\n## 职责边界\n读取分权。\n"
+                                  "## 装配预算（硬上限）\nL3 2000。\n"
+                                  "## 修订说明（已下沉）\n本地史。\n"),
+    }
+    fi, _, _ = analyze(fed_files)
+    fed_clean = not [x for x in fi if x["rule"].startswith("FED_")]
+    # undeclared deviation on mixed section -> FED_DECL ERROR + FED_REDLINE ERROR
+    # (mixed = redline + empty whitelist; undeclared change is unauthorized)
+    fed_und = dict(fed_files)
+    fed_und["01-Specs/SPEC-READ.md"] = fed_und["01-Specs/SPEC-READ.md"].replace(
+        "L3 2000。", "L3 9999。")
+    ui, _, _ = analyze(fed_und)
+    fed_und_ok = (any(x["rule"] == "FED_DECL" and x["level"] == "ERROR" for x in ui)
+                  and any(x["rule"] == "FED_REDLINE" for x in ui))
+    # redline section changed -> FED_REDLINE ERROR + FED_DECL ERROR
+    fed_red = dict(fed_files)
+    fed_red["01-Specs/SPEC-READ.md"] = fed_red["01-Specs/SPEC-READ.md"].replace(
+        "读取分权。", "读取分权改。")
+    ri, _, _ = analyze(fed_red)
+    fed_red_ok = (any(x["rule"] == "FED_REDLINE" and x["level"] == "ERROR" for x in ri)
+                  and any(x["rule"] == "FED_DECL" for x in ri))
+    # declared deviation -> FED_DECL silent (authorized), redline still fires if redline
+    fed_decl = dict(fed_und)
+    fed_decl["01-Specs/SPEC-READ.md"] = fed_decl["01-Specs/SPEC-READ.md"].replace(
+        "upstream-version: v1\n",
+        "upstream-version: v1\nlocal-revisions:\n  - { section: \"装配预算（硬上限）\", corr: [[corr-x]] }\n")
+    di, _, _ = analyze(fed_decl)
+    fed_decl_ok = (not [x for x in di if x["rule"] == "FED_DECL"]
+                   and not [x for x in di if x["rule"] == "FED_REDLINE"])
+    # empty declaration (declared but pristine) -> FED_DECL WARN
+    fed_empty = dict(fed_files)
+    fed_empty["01-Specs/SPEC-READ.md"] = fed_empty["01-Specs/SPEC-READ.md"].replace(
+        "upstream-version: v1\n",
+        "upstream-version: v1\nlocal-revisions:\n  - { section: \"装配预算（硬上限）\", corr: [[corr-x]] }\n")
+    ei, _, _ = analyze(fed_empty)
+    fed_empty_ok = any(x["rule"] == "FED_DECL" and x["level"] == "WARN" for x in ei)
+    # missing cache -> FED_VERSION WARN
+    fed_nocache = {k: v for k, v in fed_files.items() if "upstream" not in k}
+    ni, _, _ = analyze(fed_nocache)
+    fed_nocache_ok = any(x["rule"] == "FED_VERSION" and x["level"] == "WARN" for x in ni)
+    # stale federation_class key -> FED_VERSION ERROR (fail-loud)
+    fed_stale = dict(fed_files)
+    fed_stale["90-Meta/schema.yaml"] = fed_schema.replace('"职责边界": redline',
+                                                          '"不存在的节": redline')
+    si, _, _ = analyze(fed_stale)
+    fed_stale_ok = any(x["rule"] == "FED_VERSION" and x["level"] == "ERROR"
+                       and "失锚" in x["message"] for x in si)
+    # main-vault own spec (no provenance: copied) -> FED_* never fires even if changed
+    fed_main = dict(fed_files)
+    fed_main["01-Specs/SPEC-READ.md"] = fed_main["01-Specs/SPEC-READ.md"].replace(
+        "provenance: copied\n", "").replace("L3 2000。", "L3 9999。")
+    mi, _, _ = analyze(fed_main)
+    fed_main_ok = not [x for x in mi if x["rule"].startswith("FED_")
+                       and x["file"] == "01-Specs/SPEC-READ.md"]
+    fed_ok = (fed_clean and fed_und_ok and fed_red_ok and fed_decl_ok
+              and fed_empty_ok and fed_nocache_ok and fed_stale_ok and fed_main_ok)
+    ok = ok and fed_ok
+    print("  [%s] %-14s %s" % ("OK" if fed_ok else "MISS", "FED_RULES",
+                                "联邦修订权契约正确（干净copied零告警，未声明偏离ERROR/红线改动ERROR/已声明豁免/空声明WARN/缺缓存WARN/键失锚ERROR/主库自有规格不触发）" if fed_ok else
+                                "FED_* 触发或豁免不符预期"))
     # pitfall trigger contract: missing/illegal trigger + missing/empty scope fire;
     # compliant pitfall clean (red-before-green, knife F1)
     ok = ok and tf_ok
@@ -3385,7 +3725,7 @@ def self_test():
     print("  [%s] %-14s %s" % ("OK" if d10_ok else "MISS", "CLI_UTF8_DECODE",
                                 "CLI 中文 UTF-8 输出正确解码" if d10_ok else
                                 "CLI 中文输出解码失败（D10 回归）"))
-    print("\nself-test: %s（触发 %d/%d 规则 + BROKEN_SET/VOL_RULES/GOV_RULES/OV_RULES/PROJ_RULES/TRIGGER_FM/ATLAS_GROUP/HUB_RULES/BOOL_SCALAR/STATUS_RULES/DOC_IMPL_DRIFT/CLI_RECONCILE/CLI_VAULT_PIN/CLI_UTF8_DECODE；fixture 计 %d ERROR / %d WARN / %d INFO）"
+    print("\nself-test: %s（触发 %d/%d 规则 + BROKEN_SET/VOL_RULES/GOV_RULES/OV_RULES/PROJ_RULES/FED_RULES/TRIGGER_FM/ATLAS_GROUP/HUB_RULES/BOOL_SCALAR/STATUS_RULES/DOC_IMPL_DRIFT/CLI_RECONCILE/CLI_VAULT_PIN/CLI_UTF8_DECODE；fixture 计 %d ERROR / %d WARN / %d INFO）"
           % ("PASS" if ok else "FAIL", len(fired & set(expect)), len(expect),
              counts["error"], counts["warn"], counts["info"]))
     return 0 if ok else 1

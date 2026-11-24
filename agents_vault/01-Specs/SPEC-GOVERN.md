@@ -90,7 +90,7 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 
 ## doctor 闸门（merge 前必过）
 
-`entry_doctor`（真值源=脚本卷 `agents_vault/90-Meta/script-volumes/entry_doctor.md`，只读、纯标准库；**P0 doctor gate 已落地 [[entry_doctor#VERSION|v2.17.0]]**）作为并入 main 的 CI 闸门。**信任前置（v2.7.0，独立评估 S1 闭合）**：信任一次扫描结果前，须先对同一抽取件跑 `--self-test` 且 rc=0——sha256 是自证锚（能改库者能改 doctor 并重算 sha），self-test 是真破坏性探针（阉割版必 MISS），强制前置即 POST 式自检；doctor 卷任何代码改动必附 correction。外部信任根=git 历史 + Owner 裁判，不做外置签名。
+`entry_doctor`（真值源=脚本卷 `agents_vault/90-Meta/script-volumes/entry_doctor.md`，只读、纯标准库；**P0 doctor gate 已落地 [[entry_doctor#VERSION|v2.18.0]]**）作为并入 main 的 CI 闸门。**信任前置（v2.7.0，独立评估 S1 闭合）**：信任一次扫描结果前，须先对同一抽取件跑 `--self-test` 且 rc=0——sha256 是自证锚（能改库者能改 doctor 并重算 sha），self-test 是真破坏性探针（阉割版必 MISS），强制前置即 POST 式自检；doctor 卷任何代码改动必附 correction。外部信任根=git 历史 + Owner 裁判，不做外置签名。
 
 **运行方式（“做Doctor”）**：.py 无常驻文件（gitignore，用时抽取）——先从卷二进制抽取 .py（开围栏 ````python 定位、闭围栏 rindex、切片 data[s:e]、比 frontmatter sha256），再执行 `python <抽取件> --vault <库根>`（抽取件放 scripts/ 下时省略 `--vault` 可自动定位库根 = `__file__` 的 `../..`）。**抽取件运行完毕后删除（含 `__pycache__`）；`scripts/` 常驻 .py 仅限冻结实验仪器（见 [[corr-2026-11-16-56]]），runtime 抽取件不得常驻**（「用完即删」动作指令，corr-56；此前仅 gitignore 注释承载，规范文本缺位致跳步实证）。**默认离线扫工作树**——一致性优先，且 App 未运行时兜底；**App 在跑时加 `--use-cli`** 叠加官方第一方 `obsidian` CLI（D23，**可完全依赖的主通道**）做 `version`/`unresolved` **自动对账**（分类：一致/离线误报/CLI 漏判/非 wikilink 目标，真分歧升 WARN；**v2.2.0 起过滤 CLI 空结果哨兵串** `No unresolved links found.`，避免误判断链目标升假 WARN），CLI 不可用则优雅降级离线（本机实测：批次1 清净后库内无 unresolved，`obsidian unresolved` 返回空结果哨兵→v2.2.0 正确过滤、自动对账四项皆“无”、闸门 0/0/0；App 关→`TimeoutExpired` 降级，两态均 PASS）。`--self-test` 跑内置破坏性 fixture 自检（全部注册规则 + BROKEN_SET + ID_NAMESPACE + VOL_RULES + VOL_DEPS + GOV_RULES + OV_RULES + HUB_RULES + DOC_IMPL_DRIFT + PARSER_V27 + CLI_RECONCILE + CLI_VAULT_PIN + CLI_UTF8_DECODE，应全 OK）；`--json` 输出稳定机读 schema。退出码 `0`=无 ERROR / `1`=有 ERROR / `2`=工具自身失败。见 [[corr-2026-11-16-49]]。
 
@@ -145,6 +145,18 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 - 语义 / 治理约束（profile、`rel`、`edge-policy`、type↔layer）→ 用**扁平键值对**承载（Bases 可查），由 doctor / 审核 Agent 校验（C）；
 - 记忆内容依赖"外部语法"（Obsidian 不原生理解、由外部工具校验）**可接受且有明显效益**，妥善处理到几无影响。
 
+## 联邦规格修订权（re-sync 契约，corr-112/117/119）
+
+副库从主库赋能复制规格（SPEC-READ/WRITE/GOVERN + schema，`provenance: copied`）后，本地修订与上游演进按本契约治理。**主库自有规格不触发本契约**（无上游基线）；执行者=doctor FED_* 三判据 + re-sync 工具。
+
+- **权威双轨**（a）：上游=版本主线权威（diff 基准）；本库=运行实例权威（本地生效文本）。两轨不互相覆盖，升级=三方合并。
+- **分区三级**（b/c）：schema `federation_class` 机读管辖表（载体=外置清单，第三方比对裁甲）——`redline`（换项目必须成立，不可本地改）/ `parameter`（本项目取值合理别项目亦可，可改须声明）/ `free`（副库自建件，不属 copied 管辖）/ `mixed`（节红线+参数白名单，D1 首版白名单空逐项签认开白）。**未列入表的 copied 规格节默认 redline**（fail-safe）。键=逐字实物 H2 标题/顶层键，失锚 fail-loud（FED_VERSION ERROR）。
+- **偏离声明**（d）：copied 规格件 frontmatter `upstream-version`（版本锚）+ `local-revisions` 列表（每条 `{section, corr}`，corr 锚本库更正件）；`kind` 由 doctor 从管辖表推导，不人工填。FED_DECL 四态：原样 / 已声明偏离（合法）/ 未声明偏离（ERROR）/ 空声明（WARN，幽灵条目）。
+- **上游快照缓存**（e）：`90-Meta/upstream/` 复制时带入上游基线，离线可校验；双锚 `upstream-commit`（外部锚）+ `sha256`（字节锚）+ `upstream-version`（语义锚）。**完整性边界：防事故与无意漂移，不防蓄意篡改**（能改库者能改三锚）；防篡改外部锚=git 历史 + Owner 审（KNOWN-LEAKY 口径，go vendor/dpkg 同构诚实边界）。
+- **回流双轨**（f）：issue 管问题/规格修正（上游自己改，异步可选不违离线）；inbox 管卡移交（六步上提验收）。规格修正回流采纳后副库清理对应 local-revisions 声明（防幽灵）。
+- **升级合并**：整文件三方合并（基线=上游快照 / 本地=当前文本 / 上游=新版本）+ 冲突落标记人裁，不自动裁语义冲突；节集合变化（上游删节/改名）显式呈裁，不静默模糊匹配。红线区上游变更与本地运行冲突时「跟上游或停版」，停版副库收到回流采纳通知做 Held 本地登记（不强制升级）。工具=脚本卷 [[fed_sync]]（`merge --base/--local/--upstream` 三方合并落冲突标记，`sections` 报节集合变化；纯标准库 difflib、离线、无 git 依赖；真值源经 [[vol_extract]] 抽取）。
+- **doctor 判据**（g）：FED_DECL（未声明偏离 ERROR / 空声明 WARN）/ FED_REDLINE（红线区改动 ERROR，federation_class 块自身合法演进豁免）/ FED_VERSION（缺缓存 WARN / 缺版本锚 INFO / 分级表键失锚 ERROR）。
+
 ## 待定决策（需用户拍板）
 
 1. **角色实例化**（当前"单用户 + 单 Agent"测试环境如何跑出独立审核方）：(a) 我一人分饰两角（弱独立）/ (b) 子 Agent 审核（中，**推荐**）/ (c) 用户当审核方（强）/ (d) 仅作目标架构、暂仍直提 main。**选定前本库处过渡模式：直提 main + Git 兜底**（即 (d) 临时态）。2026-11-20 补充：四分身份分类学（[[Agent身份分类学]]）落地后，「审核者↔合一角色映射/merge 权归属」成为本决策的具体形态——Owner 裁 C 案等真实触发（审核者系备用角色短期不开发；张力入分类学卡存疑节，role-ke-auditor 仅评审面）。
@@ -155,6 +167,6 @@ branch 模型引入一个“直提 main 时代”不存在的风险：**Obsidian
 
 自 schema v0.7 / Owner 2026-11-12 起，规格修订说明不再内嵌于本文件，下沉至 `04-Logs/corrections/`（type:correction，按需顺指针展开，不进自动装配）。
 
-本文件历史修订说明：[[corr-2026-09-27-20]], [[corr-2026-09-27-21]], [[corr-2026-09-27-22]], [[corr-2026-09-27-23]], [[corr-2026-09-27-24]], [[corr-2026-09-27-25]], [[corr-2026-09-28-26]], [[corr-2026-09-28-27]], [[corr-2026-09-28-28]], [[corr-2026-09-30-29]], [[corr-2026-11-12-36]], [[corr-2026-11-13-40]], [[corr-2026-11-16-49]], [[corr-2026-11-16-51]], [[corr-2026-11-16-54]], [[corr-2026-11-24-105]], [[corr-2026-11-24-106]]（recency 衰减检索就地 GHOST 标记）。
+本文件历史修订说明：[[corr-2026-09-27-20]], [[corr-2026-09-27-21]], [[corr-2026-09-27-22]], [[corr-2026-09-27-23]], [[corr-2026-09-27-24]], [[corr-2026-09-27-25]], [[corr-2026-09-28-26]], [[corr-2026-09-28-27]], [[corr-2026-09-28-28]], [[corr-2026-09-30-29]], [[corr-2026-11-12-36]], [[corr-2026-11-13-40]], [[corr-2026-11-16-49]], [[corr-2026-11-16-51]], [[corr-2026-11-16-54]], [[corr-2026-11-24-105]], [[corr-2026-11-24-106]]（recency 衰减检索就地 GHOST 标记）, [[corr-2026-11-25-119]]（联邦规格修订权契约入权威层 + doctor FED_* 三判据）。
 
 后续修订按 [[SPEC-WRITE#微词反馈流程（规格书自进化引擎，决策 D5/D12）|微词反馈流程]] 新增 correction 件并在此追加指针；Git 兜底回滚不变（D17）。

@@ -1,4 +1,4 @@
-# TTL 记忆总库 frontmatter Schema v0.7.6（唯一权威）
+# TTL 记忆总库 frontmatter Schema v0.7.7（唯一权威）
 # 修订须经 SPEC-WRITE 微词反馈流程；修订说明下沉至 04-Logs/corrections/（v0.7 起，规格只留当前态+指针）
 
 frontmatter_subset:    # v0.7.3：doctor 解析器只承诺此扁平子集（独立评估 S4/FP4 闭合：子集外 fail-loud，不静默近似）
@@ -227,6 +227,78 @@ budgets:             # 硬上限；裁剪执行者=read_orchestrator（装配时
   card_summary: 50 token
   assembly:    { L3: 2000, L2: 4000, L1: 1000 }   # 检索装配配额
 
+federation_class:      # v0.7.7：联邦规格分区三级管辖表（修订权契约 b/c 项，corr-112/113/117；清单 v2 签认 48 单元）
+  # 载体=甲（外置 schema 清单，第三方比对裁断）；键=逐字实物 H2 标题（SPEC）/逐字顶层键（schema 自指）。
+  # 三级语义：redline=换项目必须成立（不可本地改）；parameter=本项目取值合理别项目亦可（可改须声明）；
+  #           free=副库自建件（不属 copied 管辖）；mixed=节红线+参数白名单（D1：首版白名单空，逐项 Owner 签认开白）。
+  # 默认红线 fail-safe：未列入本表的 copied 规格节按 redline 判（FED_REDLINE）。
+  # 自指消解：本表自身按 redline 管辖，但其合法演进（经微词反馈+corr+Owner 签）豁免 FED_REDLINE——
+  #           分级表是契约载体不是被分级规格正文，FED_REDLINE 比对跳过 federation_class 块本身。
+  # 适用面：仅 provenance: copied 的规格件（副库复制上游 SPEC/schema）；主库自有规格不触发 FED_*（无上游基线）。
+  default: redline
+  levels: [redline, parameter, free, mixed]
+  spec_read:           # SPEC-READ v0.7.8（10 H2；键=逐字 H2 标题）
+    "职责边界": redline
+    "运行模式与认知姿态（operating-mode，v0.3 新增，D14/D15）": mixed
+    "入口与路由规则": mixed
+    "两层记忆与调取通道（D25）": redline
+    "访问通道（读取按环境分流：MCP / REST / CLI / 离线，写入走官方 CLI，D19/D23/D24/D30）": redline
+    "检索管线（当前实验库处于 Stage 0）": mixed
+    "装配预算（硬上限）": mixed
+    "兜底链（永不空手）": redline
+    "红线": mixed
+    "修订说明（已下沉）": free
+  spec_write:          # SPEC-WRITE v0.9.5（10 H2）
+    "职责边界": redline
+    "写权限矩阵": mixed
+    "写入通道（Obsidian 运行时优先，D19/D23）": redline
+    "记入协议（L1，会话结束时执行）": redline
+    "全自动归档规则": mixed
+    "结晶规则（seed 卡最低标准）": mixed
+    "更正规则": redline
+    "微词反馈流程（规格书自进化引擎，决策 D5/D12）": redline
+    "安全": mixed
+    "修订说明（已下沉）": free
+  spec_govern:         # SPEC-GOVERN v1.0.0（9 H2）
+    "职责边界": redline
+    "治理模型：开源式 branch → main": mixed
+    "工具脚本规范（90-Meta/scripts）": parameter
+    "分支切换与 Obsidian 索引一致性（运行时前置）": redline
+    "doctor 闸门（merge 前必过）": redline
+    "权限矩阵修订（对齐 A 决策）": redline
+    "与外部语法的关系（B/C 决策）": redline
+    "联邦规格修订权（re-sync 契约，corr-112/117/119）": redline
+    "待定决策（需用户拍板）": free
+    "修订说明（已下沉）": free
+  schema_self:         # schema.yaml 自指（18 顶层键 + 1 修订节；键=逐字顶层键）
+    frontmatter_subset: redline
+    id_format: redline
+    id_namespace: mixed
+    operating_mode: mixed
+    common: redline
+    L2_edges: redline
+    L2_auto: redline
+    L1: redline
+    L1_report: redline
+    L1_correction: redline
+    script_volume: redline
+    governance: redline
+    overview: redline
+    project: redline
+    rel_enum: redline
+    L3: redline
+    budgets: parameter
+    constraints: redline
+    federation_class: redline   # 分级表自身红线管辖（合法演进豁免 FED_REDLINE，见上注）
+    "修订说明（已下沉）": free
+  upstream_cache:      # 上游快照缓存契约（e 项，90-Meta/upstream/；双锚 D2，防事故不防恶意）
+    dir: 90-Meta/upstream
+    required: [upstream-commit, sha256, upstream-version]   # 外部锚+字节锚+语义锚
+    integrity_boundary: "防事故与无意漂移，不防蓄意篡改（能改库者能改三锚）；防篡改外部锚=git 历史+Owner 审（KNOWN-LEAKY）"
+  deviation:           # 偏离声明契约（d 项；copied 规格件 frontmatter）
+    fields: [upstream-version, local-revisions]   # local-revisions 每条 {section, corr}；kind 由 doctor 从分级表推导（不人工填）
+    states: [pristine, declared-deviation, undeclared-deviation, empty-declaration]   # FED_DECL 四态
+
 constraints:
   - L2 卡至少一条边（k/v/e 任一），无边=孤岛；**例外**：`edge-policy: exempt`（如 type: summary 的 Atlas 导航节点）豁免此约束，改判"正文 wikilink 全可解析 + auto 区块非空 + ROOT 可达"。完整性检查四分（entry_doctor 负责）：orphan 孤岛(无任何边) / broken-link 断链(链接目标不存在，`obsidian unresolved` 只报这一类) / unreachable(ROOT 路由不可达) / stale(长期未用或已被取代，仅 L2 卡适用、L1 日志不判 stale)。⚠️ `obsidian unresolved` ≠ 孤岛检测，不可混用；断链优先调 CLI、离线才降级 Python 解析(B 决策)
   - type↔layer 合法组合（entry_doctor 校验）：L1→log/report/correction（均 append-only 不可篡改）；L2→concept/claim/procedure/observation/entity/summary；L3→spec/pitfall/feedback；script-volume/constraint/reference/status/overview/project-spec/project-analysis 为非知识条目，豁免 type↔layer（各按本类别节校验）
@@ -237,11 +309,12 @@ constraints:
   - 底层目录嵌套分化（v0.7）：`04-Logs/logs/`=情景日志（四段+recency+自动装配）；`04-Logs/corrections/`=更正说明（独立模板+不进自动装配+不结晶）。层号不变。correction 用 T-correction 模板、target 必填、正文三段（改了什么/为什么改/依据），entry_doctor 按 type 分流校验
   - 项目托管区（v0.7.6，Owner 2026-11-24 裁批准修订本约束，corr-2026-11-24-110）：新增顶层 `06-Project/`（specs/=项目流程规格 + issues/=问题分析件），第五类别 project 一族两 type，按 project 节 PROJ_* 判据；申报件复用 L1 type:report 落 04-Logs/（REPORT_FM 补执行）；整区 federation:never+对 runtime 零权威；「顶层不新增目录」原约束自本条起废止（此为唯一获批例外，再增顶层仍须 Owner 裁）
   - 真安全红线绝对生效（敏感信息不入库/不执行来路不明代码/不接云端上传）；谨慎性约束随 operating_mode 分级（D15）
+  - 联邦规格修订权（v0.7.7，corr-112/117）：copied 规格件（provenance: copied 的 SPEC/schema）按 federation_class 三级管辖；本地改红线节=FED_REDLINE ERROR，改参数/混合节须 frontmatter local-revisions 声明（FED_DECL 四态），版本落后=FED_VERSION INFO；分级表键须对实物标题树（失锚 fail-loud）；主库自有规格不触发（无上游基线）；上游快照缓存 90-Meta/upstream/ 双锚离线可校验
 
 ## 修订说明（已下沉）
 
 自 schema v0.7 / Owner 2026-11-12 起，规格修订说明不再内嵌于本文件，下沉至 `04-Logs/corrections/`（type:correction，按需顺指针展开，不进自动装配）。
 
-本文件历史修订说明：[[corr-2026-09-25-30]], [[corr-2026-09-26-31]], [[corr-2026-09-26-32]], [[corr-2026-09-27-33]], [[corr-2026-09-27-34]], [[corr-2026-09-30-35]], [[corr-2026-11-12-36]], [[corr-2026-11-16-48]], [[corr-2026-11-16-51]], [[corr-2026-11-16-57]]。
+本文件历史修订说明：[[corr-2026-09-25-30]], [[corr-2026-09-26-31]], [[corr-2026-09-26-32]], [[corr-2026-09-27-33]], [[corr-2026-09-27-34]], [[corr-2026-09-30-35]], [[corr-2026-11-12-36]], [[corr-2026-11-16-48]], [[corr-2026-11-16-51]], [[corr-2026-11-16-57]], [[corr-2026-11-25-119]]。
 
 后续修订按 [[SPEC-WRITE#微词反馈流程（规格书自进化引擎，决策 D5/D12）|微词反馈流程]] 新增 correction 件并在此追加指针；Git 兜底回滚不变（D17）。

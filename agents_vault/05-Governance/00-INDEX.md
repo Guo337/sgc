@@ -3,7 +3,7 @@ id: gov-2026-gov-index
 type: reference
 status: ACTIVE
 created: 2026-11-16
-last-touched: 2026-11-16
+last-touched: 2026-11-25
 aliases: [治理族导航, Governance Index]
 ---
 
@@ -28,6 +28,10 @@ aliases: [治理族导航, Governance Index]
 - [[STATUS]] — 项目当前态指针（type: status 单例 gov-status；批 3 先瘦后搬，见 corr-2026-11-16-60）
 - [[00-ENTRY]] — Agent 入口协议（type: constraint，P0；批 4，见 corr-2026-11-16-61）
 - [[08-BLIND-EXECUTION-ISOLATION]] — 盲态执行隔离（type: constraint，P1；批 4）
+
+## 后续新增
+
+- [[09-BETA-GATE]] — Beta 闸门判据（type: reference，FROZEN 公开件；Owner 2026-11-24 裁冻结，corr-121）
 
 **内迁完成（10/10），旧路径已退役**：`Agent-Governance/` 目录已删除（丙案，Owner 裁，corr-2026-11-16-62）；历史文档中的旧路径是记述事实，追溯介质=git 历史（[[01-AUTHORITY]] §4.1）。新引用一律用本目录路径。
 
